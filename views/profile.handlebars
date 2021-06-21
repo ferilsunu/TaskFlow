@@ -1,0 +1,100 @@
+<section class="content">
+      <div class="container-fluid">
+          
+        <div class="row  ">
+          <div class="col-md-3 profile-content">
+
+            <!-- Profile Image -->
+            <div class="card card-primary card-outline">
+              <div class="card-body box-profile">
+                <div class="text-center">
+                  <img class="profile-user-img img-fluid img-circle" src="/uploads/{{fetched_user.pic}}" alt="User profile picture">
+                </div>
+
+                <h3 class="profile-username text-center">{{fetched_user.name}}</h3>
+
+                <p class="text-muted text-center">{{fetched_user.designation}}</p>
+
+                
+
+                
+              </div>
+              <!-- /.card-body -->
+            </div>
+            <!-- /.card -->
+
+            <!-- About Me Box -->
+            
+            <!-- /.card -->
+          </div>
+          <!-- /.col -->
+          <div class="col-md-9 profile-content">
+            <div class="card">
+  
+              <div class="card-body">
+                <div class="tab-content">
+                  
+                  <!-- /.tab-pane -->
+                  
+                  <!-- /.tab-pane -->
+                  
+            {{#if success_message}}
+                    <div class="alert alert-success">
+                      {{success_message}}
+            
+                    </div>
+            {{/if}}
+
+                  <div class="tab-pane active" id="settings">
+                    <form class="form-horizontal" action="/profile?_method=PUT" method="POST" enctype="multipart/form-data">
+                      <div class="form-group row">
+                        <label for="inputName" class="col-sm-2 col-form-label">Name</label>
+                        <div class="col-sm-10">
+                          <input type="text" class="form-control" id="inputName" name="name" placeholder="Name" value="{{fetched_user.name}}" >
+                        </div>
+                      </div>
+                      <div class="form-group row">
+                        <label for="inputEmail" class="col-sm-2 col-form-label">Email</label>
+                        <div class="col-sm-10">
+                          <input type="email" class="form-control" id="inputEmail" disabled value="{{fetched_user.email}}" placeholder="Email">
+                        </div>
+                      </div>
+
+                               <div class="form-group row">
+                        <label for="inputEmail" class="col-sm-2 col-form-label">Designation</label>
+                        <div class="col-sm-10">
+                          <input type="text" class="form-control" id="inputEmail" name="designation" value="{{fetched_user.designation}}" placeholder="Designation">
+                        </div>
+                      </div>
+
+                      <div class="form-group row">
+                    <label for="exampleInputFile"  class="col-sm-2 col-form-label">Profile Picture</label>
+                    <div class="col-sm-10">
+                      <div class="custom-file">
+                        <input type="file" name="pic" class="custom-file-input" id="exampleInputFile" accept="image/x-png,image/gif,image/jpeg">
+                        <label class="custom-file-label" for="exampleInputFile">Choose file</label>
+                      </div>
+                    </div>
+                  </div>
+                   
+            
+                
+                      <div class="form-group row">
+                        <div class="offset-sm-2 col-sm-10">
+                          <button type="submit" class="btn btn-danger">Update</button>
+                        </div>
+                      </div>
+                    </form>
+                  </div>
+                  <!-- /.tab-pane -->
+                </div>
+                <!-- /.tab-content -->
+              </div><!-- /.card-body -->
+            </div>
+            <!-- /.card -->
+          </div>
+          <!-- /.col -->
+        </div>
+        <!-- /.row -->
+      </div><!-- /.container-fluid -->
+    </section>

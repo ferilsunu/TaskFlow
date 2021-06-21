@@ -1,0 +1,132 @@
+      <!-- Content Header (Page header) -->
+      <section class="content-header">
+        <div class="container-fluid">
+          <div class="row mb-2">
+            <div class="col-sm-6">
+              <h1>ToDo</h1>
+            </div>
+            
+          </div>
+        </div><!-- /.container-fluid -->
+      </section>
+  
+      <!-- Main content -->
+      <section class="content">
+  
+      <div class="row">
+        <div class="col">
+            <div class="card card-todo">
+              <div class="card-header">
+                <h3 class="card-title">ToDo List</h3>
+              </div>
+              <!-- /.card-header -->
+              <div class="card-body">
+                <table class="table table-bordered" id="myTable">
+                  <thead>
+                    <tr>
+                
+                      <th>Task</th>
+                      <th>Edit</th>
+                      <th>Delete</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {{#each fetched_todo}}
+                    <tr>
+                      
+                      <td>{{description}}</td>
+                      <td>
+                        
+                        <button class="btn btn-primary edit-btn"  value="{{_id}}" data-toggle="modal" data-target="#exampleModal">Edit</button>
+                      </td>
+                      <td><form action="/{{_id}}?_method=DELETE" method="POST"><button type="submit" class="btn btn-danger">Delete</button></form></td>
+                    </tr>
+                    {{/each}}
+          
+                  </tbody>
+                </table>
+              </div>
+              <!-- /.card-body -->
+          
+            </div>
+      </div>
+      <div class="col">
+
+            {{#if success_message}}
+                    <div class="alert alert-success">
+                      {{success_message}}
+            
+                    </div>
+            {{/if}}
+
+                  {{#if error}}
+                    <div class="alert alert-danger">
+                      {{error}}
+            
+                    </div>
+            {{/if}}
+
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title" id="edit-todo">Add toDo</h3>
+          </div>
+          <div class="card-body">
+            
+            <form action="/create" method="POST">
+            <input class="form-control" type="text" name="description" placeholder="Add Task">
+            <br>
+    <button type="submit" class="btn btn-primary float-left"><i class="fas fa-plus"></i> Add item</button>
+    </form>
+            
+          </div>
+          <!-- /.card-body -->
+        </div>
+          <div class="col-md-5 col-sm-7 col-12">
+            <div class="info-box">
+              <span class="info-box-icon bg-info"><i class="fas fa-info"></i></span>
+
+              <div class="info-box-content">
+                <span class="info-box-text">Total Tasks</span>
+                <span class="info-box-number">{{total_tasks}}</span>
+              </div>
+              <!-- /.info-box-content -->
+            </div>
+            <!-- /.info-box -->
+          </div>
+     
+        <!-- Modal -->
+  <div class="modal fade" id="exampleModal" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel" aria-hidden="true">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="exampleModalLabel">Edit Task</h5>
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <form action="/?_method=PUT" method="POST">
+         <input class="form-control edit-input" type="text" name="description">
+        <input type="hidden" name="todo_id" class="edit-input-2">
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+        <button type="submit" class="btn btn-primary">Save changes</button>
+      </div>
+              </form>
+    </div>
+  </div>
+  </div>
+
+
+
+
+      </div>
+      </div>
+  
+  
+  
+  
+  
+      </section>
+      <!-- /.content -->
