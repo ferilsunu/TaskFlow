@@ -1,112 +1,110 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import useSWR, { mutate } from 'swr';
+import axios from 'axios';
 import confetti from 'canvas-confetti';
 import { toast } from 'react-hot-toast';
-import { Task, TaskStatus, FilterState, ViewMode, Priority, Subtask } from '@/types/todo';
-import { getInitialTasks, DEFAULT_CATEGORIES } from '@/libs/initialData';
+import { Task, ViewTab, Priority, Subtask, User } from '@/types/todo';
+
+const fetcher = (url: string) => axios.get(url).then((res) => res.data);
 
 interface TaskContextType {
   tasks: Task[];
-  filteredTasks: Task[];
-  filters: FilterState;
-  setFilters: React.Dispatch<React.SetStateAction<FilterState>>;
-  viewMode: ViewMode;
-  setViewMode: (mode: ViewMode) => void;
+  isLoading: boolean;
+  activeTab: ViewTab;
+  setActiveTab: (tab: ViewTab) => void;
+  selectedCategory: string;
+  setSelectedCategory: (cat: string) => void;
   categories: string[];
+  searchQuery: string;
+  setSearchQuery: (query: string) => void;
+  
+  // Auth
+  currentUser: User | null;
+  isUserLoading: boolean;
+  isAuthModalOpen: boolean;
+  setIsAuthModalOpen: (open: boolean) => void;
+  authMode: 'login' | 'register';
+  setAuthMode: (mode: 'login' | 'register') => void;
+  logout: () => void;
+  
+  // Theme
   theme: 'light' | 'dark';
   toggleTheme: () => void;
-  
-  // Task operations
-  addTask: (taskData: Omit<Task, 'id' | 'createdAt' | 'updatedAt' | 'pomodoroSessions' | 'completed' | 'status'> & { status?: TaskStatus; completed?: boolean }) => void;
-  updateTask: (id: string, updates: Partial<Task>) => void;
-  toggleTask: (id: string) => void;
-  deleteTask: (id: string) => void;
-  duplicateTask: (id: string) => void;
-  setTaskStatus: (id: string, status: TaskStatus) => void;
-  
-  // Subtask operations
-  toggleSubtask: (taskId: string, subtaskId: string) => void;
-  addSubtask: (taskId: string, title: string) => void;
-  deleteSubtask: (taskId: string, subtaskId: string) => void;
-  
-  // Pomodoro
-  incrementPomodoro: (taskId: string) => void;
-  activePomodoroTask: Task | null;
-  setActivePomodoroTask: (task: Task | null) => void;
 
-  // Batch operations
-  clearCompletedTasks: () => void;
-  markAllAsCompleted: () => void;
-  resetToSampleData: () => void;
-  exportTasksJSON: () => void;
-  exportTasksCSV: () => void;
-  importTasksJSON: (jsonString: string) => boolean;
-
-  // Modals & UI
-  isTaskModalOpen: boolean;
-  setIsTaskModalOpen: (open: boolean) => void;
-  editingTask: Task | null;
-  setEditingTask: (task: Task | null) => void;
-  isPomodoroOpen: boolean;
-  setIsPomodoroOpen: (open: boolean) => void;
-  isAnalyticsOpen: boolean;
-  setIsAnalyticsOpen: (open: boolean) => void;
-  isCommandPaletteOpen: boolean;
-  setIsCommandPaletteOpen: (open: boolean) => void;
+  // Task Operations
+  addTask: (data: { title: string; notes?: string; priority?: Priority; category?: string; dueDate?: string | null }) => Promise<void>;
+  updateTask: (id: string, updates: Partial<Task>) => Promise<void>;
+  toggleTask: (id: string) => Promise<void>;
+  deleteTask: (id: string) => Promise<void>;
+  
+  // Subtask Operations
+  toggleSubtask: (taskId: string, subtaskId: string) => Promise<void>;
+  addSubtask: (taskId: string, title: string) => Promise<void>;
+  deleteSubtask: (taskId: string, subtaskId: string) => Promise<void>;
+  
+  // Drawer / Details
+  selectedTask: Task | null;
+  setSelectedTask: (task: Task | null) => void;
   
   // Stats
-  stats: {
-    total: number;
+  counts: {
+    today: number;
+    upcoming: number;
+    all: number;
     completed: number;
-    pending: number;
-    inProgress: number;
-    overdue: number;
-    todayDue: number;
-    completionRate: number;
-    totalPomodoros: number;
   };
 }
 
-const STORAGE_KEY = 'taskflow_todos_v2';
-const THEME_KEY = 'taskflow_theme_v2';
+const LOCAL_STORAGE_KEY = 'taskflow_offline_tasks_v3';
+const THEME_STORAGE_KEY = 'taskflow_theme_v3';
 
 const TaskContext = createContext<TaskContextType | undefined>(undefined);
 
 export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [isLoaded, setIsLoaded] = useState(false);
+  const [activeTab, setActiveTab] = useState<ViewTab>('today');
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+
+  // Auth Modals
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
+
+  // Theme
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
-  const [viewMode, setViewMode] = useState<ViewMode>('list');
 
-  // Modals
-  const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
-  const [editingTask, setEditingTask] = useState<Task | null>(null);
-  const [isPomodoroOpen, setIsPomodoroOpen] = useState(false);
-  const [activePomodoroTask, setActivePomodoroTask] = useState<Task | null>(null);
-  const [isAnalyticsOpen, setIsAnalyticsOpen] = useState(false);
-  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+  // Load User from SWR
+  const { data: currentUser, error: userError, isLoading: isUserLoading, mutate: mutateUser } = useSWR<User>(
+    '/api/user/current',
+    fetcher,
+    {
+      revalidateOnFocus: false,
+      shouldRetryOnError: false,
+    }
+  );
 
-  // Filters
-  const [filters, setFilters] = useState<FilterState>({
-    search: '',
-    category: 'all',
-    priority: 'all',
-    timeline: 'all',
-    status: 'all',
-    sortBy: 'dueDate',
-    sortOrder: 'asc',
-  });
+  // Load Tasks from API when logged in
+  const { data: serverTasks, error: tasksError, isLoading: isTasksLoading, mutate: mutateTasks } = useSWR<Task[]>(
+    currentUser ? '/api/tasks' : null,
+    fetcher,
+    {
+      revalidateOnFocus: false,
+      dedupingInterval: 2000,
+    }
+  );
 
-  // Load theme and tasks from localStorage
+  // Local Offline Tasks (when not logged in)
+  const [localTasks, setLocalTasks] = useState<Task[]>([]);
+  const [isLocalLoaded, setIsLocalLoaded] = useState(false);
+
+  // Theme initialization
   useEffect(() => {
     try {
-      const savedTheme = localStorage.getItem(THEME_KEY) as 'light' | 'dark' | null;
+      const savedTheme = localStorage.getItem(THEME_STORAGE_KEY) as 'light' | 'dark' | null;
       if (savedTheme) {
         setTheme(savedTheme);
-        if (savedTheme === 'dark') {
-          document.documentElement.classList.add('dark');
-        } else {
-          document.documentElement.classList.remove('dark');
-        }
+        if (savedTheme === 'dark') document.documentElement.classList.add('dark');
+        else document.documentElement.classList.remove('dark');
       } else {
         const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
         const initial = prefersDark ? 'dark' : 'light';
@@ -114,54 +112,32 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (initial === 'dark') document.documentElement.classList.add('dark');
       }
 
-      const savedTasks = localStorage.getItem(STORAGE_KEY);
-      if (savedTasks) {
-        setTasks(JSON.parse(savedTasks));
-      } else {
-        const initial = getInitialTasks();
-        setTasks(initial);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(initial));
+      const savedLocal = localStorage.getItem(LOCAL_STORAGE_KEY);
+      if (savedLocal) {
+        setLocalTasks(JSON.parse(savedLocal));
       }
-    } catch (e) {
-      console.error('Failed to load tasks from storage:', e);
-      setTasks(getInitialTasks());
+    } catch {
+      // ignore
     } finally {
-      setIsLoaded(true);
+      setIsLocalLoaded(true);
     }
   }, []);
 
-  // Save tasks to localStorage when modified
+  // Save local tasks when modified (only if guest)
   useEffect(() => {
-    if (isLoaded) {
+    if (isLocalLoaded && !currentUser) {
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
-      } catch (e) {
-        console.error('Failed to persist tasks:', e);
+        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(localTasks));
+      } catch {
+        // ignore
       }
     }
-  }, [tasks, isLoaded]);
-
-  // Global keyboard shortcuts (Cmd+K, etc.)
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-        e.preventDefault();
-        setIsCommandPaletteOpen((prev) => !prev);
-      }
-      if ((e.metaKey || e.ctrlKey) && e.key === 'n') {
-        e.preventDefault();
-        setEditingTask(null);
-        setIsTaskModalOpen(true);
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [localTasks, isLocalLoaded, currentUser]);
 
   const toggleTheme = useCallback(() => {
     setTheme((prev) => {
       const next = prev === 'light' ? 'dark' : 'light';
-      localStorage.setItem(THEME_KEY, next);
+      localStorage.setItem(THEME_STORAGE_KEY, next);
       if (next === 'dark') {
         document.documentElement.classList.add('dark');
       } else {
@@ -171,402 +147,245 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
   }, []);
 
-  // Trigger celebration confetti
-  const triggerCelebration = useCallback(() => {
+  const triggerConfetti = useCallback(() => {
     try {
       confetti({
-        particleCount: 80,
-        spread: 70,
-        origin: { y: 0.7 },
-        colors: ['#6366f1', '#10b981', '#f59e0b', '#3b82f6', '#ec4899'],
+        particleCount: 50,
+        spread: 60,
+        origin: { y: 0.8 },
+        colors: ['#4f46e5', '#10b981', '#f59e0b', '#3b82f6'],
       });
     } catch {
       // ignore
     }
   }, []);
 
-  // Add Task
-  const addTask = useCallback((taskData: Omit<Task, 'id' | 'createdAt' | 'updatedAt' | 'pomodoroSessions' | 'completed' | 'status'> & { status?: TaskStatus; completed?: boolean }) => {
-    const now = new Date().toISOString();
-    const newTask: Task = {
-      ...taskData,
-      id: `task-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      completed: taskData.completed ?? false,
-      status: taskData.status ?? (taskData.completed ? 'completed' : 'todo'),
-      createdAt: now,
-      updatedAt: now,
-      pomodoroSessions: 0,
-      subtasks: taskData.subtasks || [],
-      tags: taskData.tags || [],
-    };
-
-    setTasks((prev) => [newTask, ...prev]);
-    toast.success('Task created');
-  }, []);
-
-  // Update Task
-  const updateTask = useCallback((id: string, updates: Partial<Task>) => {
-    setTasks((prev) =>
-      prev.map((task) => {
-        if (task.id !== id) return task;
-        const updated = {
-          ...task,
-          ...updates,
-          updatedAt: new Date().toISOString(),
-        };
-        // sync status and completed flag
-        if (updates.completed !== undefined && updates.status === undefined) {
-          updated.status = updates.completed ? 'completed' : 'todo';
-        } else if (updates.status !== undefined && updates.completed === undefined) {
-          updated.completed = updates.status === 'completed';
-        }
-        return updated;
-      })
-    );
-    toast.success('Task updated');
-  }, []);
-
-  // Toggle Task Completion
-  const toggleTask = useCallback((id: string) => {
-    setTasks((prev) =>
-      prev.map((task) => {
-        if (task.id !== id) return task;
-        const willComplete = !task.completed;
-        if (willComplete) {
-          triggerCelebration();
-        }
-        return {
-          ...task,
-          completed: willComplete,
-          status: willComplete ? 'completed' : 'todo',
-          updatedAt: new Date().toISOString(),
-        };
-      })
-    );
-  }, [triggerCelebration]);
-
-  // Set Task Status (for Board Drag/Move)
-  const setTaskStatus = useCallback((id: string, status: TaskStatus) => {
-    setTasks((prev) =>
-      prev.map((task) => {
-        if (task.id !== id) return task;
-        const isCompleted = status === 'completed';
-        if (isCompleted && !task.completed) {
-          triggerCelebration();
-        }
-        return {
-          ...task,
-          status,
-          completed: isCompleted,
-          updatedAt: new Date().toISOString(),
-        };
-      })
-    );
-  }, [triggerCelebration]);
-
-  // Delete Task
-  const deleteTask = useCallback((id: string) => {
-    setTasks((prev) => prev.filter((task) => task.id !== id));
-    toast.success('Task deleted');
-  }, []);
-
-  // Duplicate Task
-  const duplicateTask = useCallback((id: string) => {
-    setTasks((prev) => {
-      const existing = prev.find((t) => t.id === id);
-      if (!existing) return prev;
-      const clone: Task = {
-        ...existing,
-        id: `task-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        title: `${existing.title} (Copy)`,
-        completed: false,
-        status: 'todo',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        pomodoroSessions: 0,
-        subtasks: existing.subtasks.map((s) => ({ ...s, id: `sub-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`, completed: false })),
-      };
-      return [clone, ...prev];
-    });
-    toast.success('Task duplicated');
-  }, []);
-
-  // Subtask operations
-  const toggleSubtask = useCallback((taskId: string, subtaskId: string) => {
-    setTasks((prev) =>
-      prev.map((task) => {
-        if (task.id !== taskId) return task;
-        const updatedSubtasks = task.subtasks.map((st) =>
-          st.id === subtaskId ? { ...st, completed: !st.completed } : st
-        );
-        const allCompleted = updatedSubtasks.length > 0 && updatedSubtasks.every((st) => st.completed);
-        return {
-          ...task,
-          subtasks: updatedSubtasks,
-          completed: allCompleted ? true : task.completed,
-          status: allCompleted ? 'completed' : task.status,
-          updatedAt: new Date().toISOString(),
-        };
-      })
-    );
-  }, []);
-
-  const addSubtask = useCallback((taskId: string, title: string) => {
-    if (!title.trim()) return;
-    setTasks((prev) =>
-      prev.map((task) => {
-        if (task.id !== taskId) return task;
-        const newSubtask: Subtask = {
-          id: `sub-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-          title: title.trim(),
-          completed: false,
-        };
-        return {
-          ...task,
-          subtasks: [...task.subtasks, newSubtask],
-          updatedAt: new Date().toISOString(),
-        };
-      })
-    );
-  }, []);
-
-  const deleteSubtask = useCallback((taskId: string, subtaskId: string) => {
-    setTasks((prev) =>
-      prev.map((task) => {
-        if (task.id !== taskId) return task;
-        return {
-          ...task,
-          subtasks: task.subtasks.filter((st) => st.id !== subtaskId),
-          updatedAt: new Date().toISOString(),
-        };
-      })
-    );
-  }, []);
-
-  // Pomodoro
-  const incrementPomodoro = useCallback((taskId: string) => {
-    setTasks((prev) =>
-      prev.map((task) => {
-        if (task.id !== taskId) return task;
-        return {
-          ...task,
-          pomodoroSessions: (task.pomodoroSessions || 0) + 1,
-          updatedAt: new Date().toISOString(),
-        };
-      })
-    );
-    toast.success('Focus session logged!');
-  }, []);
-
-  // Batch operations
-  const clearCompletedTasks = useCallback(() => {
-    setTasks((prev) => prev.filter((t) => !t.completed));
-    toast.success('Completed tasks cleared');
-  }, []);
-
-  const markAllAsCompleted = useCallback(() => {
-    setTasks((prev) =>
-      prev.map((t) => ({
-        ...t,
-        completed: true,
-        status: 'completed',
-        subtasks: t.subtasks.map((s) => ({ ...s, completed: true })),
-        updatedAt: new Date().toISOString(),
-      }))
-    );
-    triggerCelebration();
-    toast.success('All tasks marked as completed');
-  }, [triggerCelebration]);
-
-  const resetToSampleData = useCallback(() => {
-    const samples = getInitialTasks();
-    setTasks(samples);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(samples));
-    toast.success('Reset to sample data');
-  }, []);
-
-  // Export / Import
-  const exportTasksJSON = useCallback(() => {
-    const jsonStr = JSON.stringify(tasks, null, 2);
-    const blob = new Blob([jsonStr], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `tasks-backup-${new Date().toISOString().split('T')[0]}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-    toast.success('Tasks exported as JSON');
-  }, [tasks]);
-
-  const exportTasksCSV = useCallback(() => {
-    const headers = ['Title', 'Description', 'Status', 'Priority', 'Category', 'Due Date', 'Tags', 'Created At'];
-    const rows = tasks.map((t) => [
-      `"${t.title.replace(/"/g, '""')}"`,
-      `"${(t.description || '').replace(/"/g, '""')}"`,
-      t.status,
-      t.priority,
-      t.category,
-      t.dueDate || '',
-      `"${t.tags.join(', ')}"`,
-      t.createdAt,
-    ]);
-    const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `tasks-export-${new Date().toISOString().split('T')[0]}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-    toast.success('Tasks exported as CSV');
-  }, [tasks]);
-
-  const importTasksJSON = useCallback((jsonString: string): boolean => {
-    try {
-      const parsed = JSON.parse(jsonString);
-      if (!Array.isArray(parsed)) throw new Error('Invalid format');
-      setTasks(parsed);
-      toast.success(`Imported ${parsed.length} tasks successfully`);
-      return true;
-    } catch {
-      toast.error('Invalid JSON file format');
-      return false;
+  // Active tasks pool (from server or local)
+  const tasks: Task[] = useMemo(() => {
+    if (currentUser) {
+      return Array.isArray(serverTasks) ? serverTasks : [];
     }
-  }, []);
+    return localTasks;
+  }, [currentUser, serverTasks, localTasks]);
 
-  // Dynamic Categories list from existing tasks + defaults
+  // Keep selectedTask in sync with tasks state
+  useEffect(() => {
+    if (selectedTask) {
+      const fresh = tasks.find((t) => t.id === selectedTask.id);
+      if (fresh) setSelectedTask(fresh);
+    }
+  }, [tasks]);
+
+  // Dynamic Categories
   const categories = useMemo(() => {
-    const set = new Set(DEFAULT_CATEGORIES.map((c) => c.name));
+    const set = new Set(['Inbox', 'Work', 'Personal', 'Shopping']);
     tasks.forEach((t) => {
       if (t.category) set.add(t.category);
     });
     return Array.from(set);
   }, [tasks]);
 
-  // Filtered & Sorted Tasks
-  const filteredTasks = useMemo(() => {
+  // Add Task
+  const addTask = useCallback(
+    async (data: { title: string; notes?: string; priority?: Priority; category?: string; dueDate?: string | null }) => {
+      const title = data.title.trim();
+      if (!title) return;
+
+      const now = new Date().toISOString();
+      const newTask: Task = {
+        id: `task-${Date.now()}`,
+        title,
+        notes: data.notes || '',
+        completed: false,
+        priority: data.priority || 'medium',
+        category: data.category || 'Inbox',
+        dueDate: data.dueDate !== undefined ? data.dueDate : (activeTab === 'today' ? now.split('T')[0] : null),
+        subtasks: [],
+        createdAt: now,
+        updatedAt: now,
+      };
+
+      if (currentUser) {
+        // Optimistic UI update for SWR
+        mutate('/api/tasks', (current: Task[] = []) => [newTask, ...current], false);
+        try {
+          const res = await axios.post('/api/tasks', {
+            title: newTask.title,
+            notes: newTask.notes,
+            completed: false,
+            priority: newTask.priority,
+            category: newTask.category,
+            dueDate: newTask.dueDate,
+            subtasks: [],
+          });
+          // Update SWR cache with server created object containing true ObjectId
+          mutate('/api/tasks', (current: Task[] = []) =>
+            current.map((t) => (t.id === newTask.id ? res.data : t)),
+            false
+          );
+        } catch {
+          mutate('/api/tasks');
+          toast.error('Could not save task to database');
+        }
+      } else {
+        setLocalTasks((prev) => [newTask, ...prev]);
+      }
+    },
+    [currentUser, activeTab]
+  );
+
+  // Update Task
+  const updateTask = useCallback(
+    async (id: string, updates: Partial<Task>) => {
+      if (currentUser) {
+        mutate(
+          '/api/tasks',
+          (current: Task[] = []) =>
+            current.map((t) => (t.id === id ? { ...t, ...updates, updatedAt: new Date().toISOString() } : t)),
+          false
+        );
+        try {
+          await axios.patch(`/api/tasks/${id}`, updates);
+        } catch {
+          mutate('/api/tasks');
+          toast.error('Could not update task');
+        }
+      } else {
+        setLocalTasks((prev) =>
+          prev.map((t) => (t.id === id ? { ...t, ...updates, updatedAt: new Date().toISOString() } : t))
+        );
+      }
+    },
+    [currentUser]
+  );
+
+  // Toggle Task Completion
+  const toggleTask = useCallback(
+    async (id: string) => {
+      const task = tasks.find((t) => t.id === id);
+      if (!task) return;
+      const willComplete = !task.completed;
+      if (willComplete) triggerConfetti();
+
+      await updateTask(id, { completed: willComplete });
+    },
+    [tasks, updateTask, triggerConfetti]
+  );
+
+  // Delete Task
+  const deleteTask = useCallback(
+    async (id: string) => {
+      if (selectedTask?.id === id) setSelectedTask(null);
+
+      if (currentUser) {
+        mutate('/api/tasks', (current: Task[] = []) => current.filter((t) => t.id !== id), false);
+        try {
+          await axios.delete(`/api/tasks/${id}`);
+          toast.success('Task deleted');
+        } catch {
+          mutate('/api/tasks');
+          toast.error('Could not delete task');
+        }
+      } else {
+        setLocalTasks((prev) => prev.filter((t) => t.id !== id));
+        toast.success('Task deleted');
+      }
+    },
+    [currentUser, selectedTask]
+  );
+
+  // Subtask operations
+  const toggleSubtask = useCallback(
+    async (taskId: string, subtaskId: string) => {
+      const task = tasks.find((t) => t.id === taskId);
+      if (!task) return;
+      const currentSubtasks = task.subtasks || [];
+      const updated = currentSubtasks.map((st) => (st.id === subtaskId ? { ...st, completed: !st.completed } : st));
+      await updateTask(taskId, { subtasks: updated });
+    },
+    [tasks, updateTask]
+  );
+
+  const addSubtask = useCallback(
+    async (taskId: string, title: string) => {
+      const task = tasks.find((t) => t.id === taskId);
+      if (!task || !title.trim()) return;
+      const newSub: Subtask = {
+        id: `sub-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+        title: title.trim(),
+        completed: false,
+      };
+      const updated = [...(task.subtasks || []), newSub];
+      await updateTask(taskId, { subtasks: updated });
+    },
+    [tasks, updateTask]
+  );
+
+  const deleteSubtask = useCallback(
+    async (taskId: string, subtaskId: string) => {
+      const task = tasks.find((t) => t.id === taskId);
+      if (!task) return;
+      const updated = (task.subtasks || []).filter((st) => st.id !== subtaskId);
+      await updateTask(taskId, { subtasks: updated });
+    },
+    [tasks, updateTask]
+  );
+
+  const logout = useCallback(async () => {
+    try {
+      const { signOut } = await import('next-auth/react');
+      await signOut({ redirect: false });
+      mutate('/api/user/current', null, false);
+      mutate('/api/tasks', [], false);
+      toast.success('Signed out');
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  // Counts for tabs
+  const counts = useMemo(() => {
     const todayStr = new Date().toISOString().split('T')[0];
-
-    return tasks.filter((task) => {
-      // Search
-      if (filters.search) {
-        const q = filters.search.toLowerCase();
-        const matchTitle = task.title.toLowerCase().includes(q);
-        const matchDesc = (task.description || '').toLowerCase().includes(q);
-        const matchTag = task.tags.some((t) => t.toLowerCase().includes(q));
-        if (!matchTitle && !matchDesc && !matchTag) return false;
-      }
-
-      // Category
-      if (filters.category !== 'all' && task.category !== filters.category) {
-        return false;
-      }
-
-      // Priority
-      if (filters.priority !== 'all' && task.priority !== filters.priority) {
-        return false;
-      }
-
-      // Status
-      if (filters.status !== 'all' && task.status !== filters.status) {
-        return false;
-      }
-
-      // Timeline Filter
-      if (filters.timeline === 'today') {
-        if (task.dueDate !== todayStr) return false;
-      } else if (filters.timeline === 'upcoming') {
-        if (!task.dueDate || task.dueDate <= todayStr) return false;
-      } else if (filters.timeline === 'overdue') {
-        if (!task.dueDate || task.dueDate >= todayStr || task.completed) return false;
-      } else if (filters.timeline === 'completed') {
-        if (!task.completed) return false;
-      }
-
-      return true;
-    }).sort((a, b) => {
-      let comparison = 0;
-      if (filters.sortBy === 'dueDate') {
-        const dateA = a.dueDate || '9999-99-99';
-        const dateB = b.dueDate || '9999-99-99';
-        comparison = dateA.localeCompare(dateB);
-      } else if (filters.sortBy === 'priority') {
-        const priorityOrder: Record<Priority, number> = { urgent: 4, high: 3, medium: 2, low: 1 };
-        comparison = (priorityOrder[b.priority] || 0) - (priorityOrder[a.priority] || 0);
-      } else if (filters.sortBy === 'createdAt') {
-        comparison = new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-      } else if (filters.sortBy === 'title') {
-        comparison = a.title.localeCompare(b.title);
-      }
-      return filters.sortOrder === 'asc' ? comparison : -comparison;
-    });
-  }, [tasks, filters]);
-
-  // Statistics calculation
-  const stats = useMemo(() => {
-    const todayStr = new Date().toISOString().split('T')[0];
-    const total = tasks.length;
+    const pending = tasks.filter((t) => !t.completed);
+    const today = pending.filter((t) => t.dueDate === todayStr).length;
+    const upcoming = pending.filter((t) => t.dueDate && t.dueDate > todayStr).length;
+    const all = pending.length;
     const completed = tasks.filter((t) => t.completed).length;
-    const inProgress = tasks.filter((t) => t.status === 'in_progress').length;
-    const pending = tasks.filter((t) => !t.completed).length;
-    const overdue = tasks.filter((t) => !t.completed && t.dueDate && t.dueDate < todayStr).length;
-    const todayDue = tasks.filter((t) => t.dueDate === todayStr).length;
-    const completionRate = total > 0 ? Math.round((completed / total) * 100) : 0;
-    const totalPomodoros = tasks.reduce((acc, t) => acc + (t.pomodoroSessions || 0), 0);
 
-    return {
-      total,
-      completed,
-      pending,
-      inProgress,
-      overdue,
-      todayDue,
-      completionRate,
-      totalPomodoros,
-    };
+    return { today, upcoming, all, completed };
   }, [tasks]);
 
   return (
     <TaskContext.Provider
       value={{
         tasks,
-        filteredTasks,
-        filters,
-        setFilters,
-        viewMode,
-        setViewMode,
+        isLoading: currentUser ? isTasksLoading : !isLocalLoaded,
+        activeTab,
+        setActiveTab,
+        selectedCategory,
+        setSelectedCategory,
         categories,
+        searchQuery,
+        setSearchQuery,
+        currentUser: currentUser || null,
+        isUserLoading,
+        isAuthModalOpen,
+        setIsAuthModalOpen,
+        authMode,
+        setAuthMode,
+        logout,
         theme,
         toggleTheme,
         addTask,
         updateTask,
         toggleTask,
         deleteTask,
-        duplicateTask,
-        setTaskStatus,
         toggleSubtask,
         addSubtask,
         deleteSubtask,
-        incrementPomodoro,
-        activePomodoroTask,
-        setActivePomodoroTask,
-        clearCompletedTasks,
-        markAllAsCompleted,
-        resetToSampleData,
-        exportTasksJSON,
-        exportTasksCSV,
-        importTasksJSON,
-        isTaskModalOpen,
-        setIsTaskModalOpen,
-        editingTask,
-        setEditingTask,
-        isPomodoroOpen,
-        setIsPomodoroOpen,
-        isAnalyticsOpen,
-        setIsAnalyticsOpen,
-        isCommandPaletteOpen,
-        setIsCommandPaletteOpen,
-        stats,
+        selectedTask,
+        setSelectedTask,
+        counts,
       }}
     >
       {children}
