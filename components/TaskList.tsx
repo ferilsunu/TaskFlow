@@ -9,7 +9,7 @@ export const TaskList: React.FC = () => {
   const todayStr = new Date().toISOString().split('T')[0];
 
   const filteredTasks = useMemo(() => {
-    return tasks.filter((task) => {
+    const list = tasks.filter((task) => {
       // 1. Search filter
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
@@ -25,25 +25,24 @@ export const TaskList: React.FC = () => {
       }
 
       // 3. Tab filter
-      if (activeTab === 'completed') {
-        return task.completed;
-      }
-
-      // If viewing active tabs (today, upcoming, all), only show pending tasks
-      if (task.completed) {
-        return false;
-      }
-
       if (activeTab === 'today') {
-        return task.dueDate === todayStr;
+        return task.dueDate === todayStr || (!task.completed && task.dueDate && task.dueDate < todayStr);
       }
 
       if (activeTab === 'upcoming') {
         return task.dueDate && task.dueDate > todayStr;
       }
 
-      // 'all' shows all pending tasks
+      // 'all' shows all tasks
       return true;
+    });
+
+    // Sort: uncompleted tasks first, completed tasks at the bottom
+    return list.sort((a, b) => {
+      if (a.completed === b.completed) {
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      }
+      return a.completed ? 1 : -1;
     });
   }, [tasks, activeTab, selectedCategory, searchQuery, todayStr]);
 
@@ -64,11 +63,32 @@ export const TaskList: React.FC = () => {
     return <EmptyState />;
   }
 
+  const activeTasks = filteredTasks.filter((t) => !t.completed);
+  const completedTasks = filteredTasks.filter((t) => t.completed);
+
   return (
     <div className="space-y-2.5">
-      {filteredTasks.map((task) => (
+      {/* Active Pending Tasks */}
+      {activeTasks.map((task) => (
         <TaskItem key={task.id} task={task} />
       ))}
+
+      {/* Completed Tasks section within the same tab */}
+      {completedTasks.length > 0 && (
+        <div className="pt-2 space-y-2.5">
+          {activeTasks.length > 0 && (
+            <div className="flex items-center gap-2 py-1">
+              <span className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider">
+                Completed ({completedTasks.length})
+              </span>
+              <div className="flex-1 border-t border-neutral-200/60 dark:border-neutral-800/80" />
+            </div>
+          )}
+          {completedTasks.map((task) => (
+            <TaskItem key={task.id} task={task} />
+          ))}
+        </div>
+      )}
     </div>
   );
 };

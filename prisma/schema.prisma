@@ -8,14 +8,17 @@ datasource db {
 }
 
 model User {
-  id             String    @id @default(auto()) @map("_id") @db.ObjectId
-  name           String?
-  email          String    @unique
-  hashedPassword String
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  id                  String    @id @default(auto()) @map("_id") @db.ObjectId
+  name                String?
+  email               String    @unique
+  hashedPassword      String
+  emailVerified       DateTime?
+  verificationCode    String?
+  verificationExpires DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
-  tasks          Task[]
+  tasks               Task[]
 }
 
 model Task {
@@ -26,6 +29,8 @@ model Task {
   priority       String    @default("medium")
   category       String    @default("Inbox")
   dueDate        String?
+  reminderAt     DateTime?
+  reminderSent   Boolean   @default(false)
   subtasks       Json?
   userId         String    @db.ObjectId
   user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)

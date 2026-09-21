@@ -7,7 +7,9 @@ import {
   Folder, 
   Check, 
   Plus, 
-  CheckSquare 
+  CheckSquare,
+  Bell,
+  BellOff
 } from 'lucide-react';
 import { useTasks } from '@/context/TaskContext';
 import { Priority, Subtask } from '@/types/todo';
@@ -29,6 +31,7 @@ export const TaskDrawer: React.FC = () => {
   const [priority, setPriority] = useState<Priority>('medium');
   const [category, setCategory] = useState('Inbox');
   const [dueDate, setDueDate] = useState('');
+  const [reminderAt, setReminderAt] = useState('');
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
 
   useEffect(() => {
@@ -39,6 +42,19 @@ export const TaskDrawer: React.FC = () => {
       setCategory(selectedTask.category);
       setDueDate(selectedTask.dueDate || '');
       setNewSubtaskTitle('');
+
+      if (selectedTask.reminderAt) {
+        try {
+          const d = new Date(selectedTask.reminderAt);
+          const pad = (n: number) => n.toString().padStart(2, '0');
+          const formatted = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+          setReminderAt(formatted);
+        } catch {
+          setReminderAt('');
+        }
+      } else {
+        setReminderAt('');
+      }
     }
   }, [selectedTask]);
 
@@ -69,6 +85,27 @@ export const TaskDrawer: React.FC = () => {
   const handleDateChange = (newD: string) => {
     setDueDate(newD);
     updateTask(selectedTask.id, { dueDate: newD || null });
+  };
+
+  const handleReminderChange = (newR: string) => {
+    setReminderAt(newR);
+    updateTask(selectedTask.id, { reminderAt: newR ? new Date(newR).toISOString() : null });
+  };
+
+  const setPresetReminder = (offsetHours: number) => {
+    const d = new Date(Date.now() + offsetHours * 60 * 60 * 1000);
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    const formatted = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    handleReminderChange(formatted);
+  };
+
+  const setTomorrowMorningReminder = () => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    d.setHours(9, 0, 0, 0);
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    const formatted = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    handleReminderChange(formatted);
   };
 
   const handleAddSubtask = (e: React.FormEvent) => {
@@ -188,6 +225,53 @@ export const TaskDrawer: React.FC = () => {
                   </option>
                 ))}
               </select>
+            </div>
+          </div>
+
+          {/* Set Reminder Section */}
+          <div className="p-3 rounded-2xl bg-neutral-50 dark:bg-neutral-800/40 border border-neutral-100 dark:border-neutral-800/80">
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-[11px] font-semibold text-neutral-600 dark:text-neutral-300 flex items-center gap-1.5">
+                <Bell className="h-3.5 w-3.5 text-neutral-500" />
+                <span>Email Reminder</span>
+              </label>
+              {reminderAt && (
+                <span className="text-[10px] text-brand-600 dark:text-brand-400 font-bold">
+                  Active
+                </span>
+              )}
+            </div>
+            <input
+              type="datetime-local"
+              value={reminderAt}
+              onChange={(e) => handleReminderChange(e.target.value)}
+              className="w-full px-2.5 py-1.5 rounded-xl bg-white dark:bg-neutral-800 border border-neutral-200/80 dark:border-neutral-700 text-neutral-900 dark:text-white text-xs outline-none"
+            />
+            <div className="flex items-center gap-1.5 mt-2 flex-wrap text-xs">
+              <button
+                type="button"
+                onClick={() => setPresetReminder(1)}
+                className="text-[10px] px-2 py-0.5 rounded-md bg-white dark:bg-neutral-700 border border-neutral-200 dark:border-neutral-600 text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 transition"
+              >
+                In 1 Hour
+              </button>
+              <button
+                type="button"
+                onClick={setTomorrowMorningReminder}
+                className="text-[10px] px-2 py-0.5 rounded-md bg-white dark:bg-neutral-700 border border-neutral-200 dark:border-neutral-600 text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 transition"
+              >
+                Tomorrow 9 AM
+              </button>
+              {reminderAt && (
+                <button
+                  type="button"
+                  onClick={() => handleReminderChange('')}
+                  className="text-[10px] px-2 py-0.5 rounded-md text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition flex items-center gap-1"
+                >
+                  <BellOff className="h-2.5 w-2.5" />
+                  <span>Remove</span>
+                </button>
+              )}
             </div>
           </div>
 

@@ -32,7 +32,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     if (req.method === "PATCH" || req.method === "PUT") {
-      const { title, notes, completed, priority, category, dueDate, subtasks } = req.body;
+      const { title, notes, completed, priority, category, dueDate, reminderAt, subtasks } = req.body;
 
       const dataToUpdate: any = {};
       if (title !== undefined && typeof title === "string") dataToUpdate.title = title.trim().slice(0, 300);
@@ -41,6 +41,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (priority !== undefined && typeof priority === "string") dataToUpdate.priority = priority;
       if (category !== undefined && typeof category === "string") dataToUpdate.category = category.trim().slice(0, 50);
       if (dueDate !== undefined) dataToUpdate.dueDate = typeof dueDate === "string" && dueDate ? dueDate.slice(0, 20) : null;
+      if (reminderAt !== undefined) {
+        dataToUpdate.reminderAt = reminderAt ? new Date(reminderAt) : null;
+        dataToUpdate.reminderSent = false;
+      }
       if (subtasks !== undefined) dataToUpdate.subtasks = Array.isArray(subtasks) ? subtasks : [];
 
       const updatedTask = await prisma.task.update({

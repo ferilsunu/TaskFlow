@@ -1,5 +1,5 @@
 import React from 'react';
-import { Check, Sparkles } from 'lucide-react';
+import { Check } from 'lucide-react';
 import { useTasks } from '@/context/TaskContext';
 
 export const EmptyState: React.FC = () => {
@@ -24,11 +24,6 @@ export const EmptyState: React.FC = () => {
         return {
           title: "No upcoming tasks",
           subtitle: "Tasks with future dates will appear here.",
-        };
-      case 'completed':
-        return {
-          title: "No completed tasks yet",
-          subtitle: "Completed tasks will be archived here.",
         };
       case 'all':
       default:

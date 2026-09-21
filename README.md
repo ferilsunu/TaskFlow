@@ -32,14 +32,17 @@ Experience the live application: **[https://taskflow.ferilsunu.com](https://task
 
 ### 📱 Mobile-First Experience
 * **Touch-Optimized**: Designed from the ground up for mobile screens and handheld ergonomics.
-* **Slide-Over & Bottom-Sheet**: Seamless task drawer for notes, checklist subtasks, and scheduling.
-* **Responsive Focus Tabs**: Quick filters for Today, Upcoming, Planner, All, and Completed tasks.
+* **Slide-Over & Bottom-Sheet**: Seamless task drawer for notes, checklist subtasks, reminders, and scheduling.
+* **Responsive Focus Tabs**: 4 streamlined filters for Today, Upcoming, Planner, and All tasks.
+* **In-Place Task Completion**: Completed tasks remain organized within their respective view with clear strike-through styling and instant unchecking.
 
 ### 📅 Google Calendar-Style Mobile Planner
 * **Interactive Month Matrix**: Touch-friendly calendar grid with priority dot indicators and fast month navigation.
 * **Agenda & Day Timeline**: Detailed day planning view with inline quick task scheduler and overdue rescheduling banner.
 
-### 🔒 Secure Authentication & Cloud Database
+### ✉️ Email Verification & Scheduled Reminders
+* **Email Verification on Signup**: 6-digit verification code and 1-click email confirmation links to guarantee authentic users.
+* **Task Email Reminders**: Configurable email notifications dispatched securely before or at task due times.
 * **NextAuth & MongoDB**: Secure user sessions powered by NextAuth Credentials Provider and Prisma ORM.
 * **30-Day Remember Me**: Configurable session persistence allowing users to stay securely signed in.
 * **Strict IDOR Protection**: Server-side user authorization on every API route (`/api/tasks`, `/api/tasks/[id]`).

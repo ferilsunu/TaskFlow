@@ -14,17 +14,20 @@ export interface Task {
   priority: Priority;
   category: string;
   dueDate?: string | null; // YYYY-MM-DD
+  reminderAt?: string | null; // ISO datetime string
+  reminderSent?: boolean;
   subtasks?: Subtask[] | null;
   userId?: string;
   createdAt: string;
   updatedAt: string;
 }
 
-export type ViewTab = 'today' | 'upcoming' | 'calendar' | 'all' | 'completed';
+export type ViewTab = 'today' | 'upcoming' | 'calendar' | 'all';
 
 export interface User {
   id: string;
   name?: string | null;
   email: string;
+  emailVerified?: string | null;
   createdAt: string;
 }

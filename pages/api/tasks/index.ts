@@ -26,7 +26,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     if (req.method === "POST") {
-      const { title, notes, completed, priority, category, dueDate, subtasks } = req.body;
+      const { title, notes, completed, priority, category, dueDate, reminderAt, subtasks } = req.body;
 
       if (!title || typeof title !== "string" || !title.trim()) {
         return res.status(400).json({ error: "Task title is required" });
@@ -40,6 +40,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           priority: typeof priority === "string" ? priority : "medium",
           category: typeof category === "string" && category.trim() ? category.trim().slice(0, 50) : "Inbox",
           dueDate: typeof dueDate === "string" && dueDate ? dueDate.slice(0, 20) : null,
+          reminderAt: reminderAt ? new Date(reminderAt) : null,
+          reminderSent: false,
           subtasks: Array.isArray(subtasks) ? subtasks : [],
           userId: currentUser.id,
         },

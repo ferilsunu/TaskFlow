@@ -1,5 +1,5 @@
 import React from 'react';
-import { Check, Calendar, CheckSquare, MoreVertical, Trash2 } from 'lucide-react';
+import { Check, Calendar, CheckSquare, Trash2, Bell } from 'lucide-react';
 import { Task, Priority } from '@/types/todo';
 import { useTasks } from '@/context/TaskContext';
 import { format, isToday, isTomorrow, isPast, parseISO } from 'date-fns';
@@ -62,7 +62,7 @@ export const TaskItem: React.FC<TaskItemProps> = ({ task }) => {
           aria-label={task.completed ? "Mark incomplete" : "Mark complete"}
           className={`flex-shrink-0 h-5 w-5 rounded-full border flex items-center justify-center transition-all ${
             task.completed
-              ? 'bg-emerald-500 border-emerald-500 text-white shadow-xs'
+              ? 'bg-emerald-500 border-emerald-500 text-white shadow-xs hover:bg-emerald-600'
               : 'border-neutral-300 dark:border-neutral-600 hover:border-brand-500 hover:scale-105'
           }`}
         >
@@ -89,8 +89,15 @@ export const TaskItem: React.FC<TaskItemProps> = ({ task }) => {
         </div>
       </div>
 
-      {/* Right: Meta Indicators (Subtasks, Due date, Category, Priority Dot) */}
+      {/* Right: Meta Indicators (Reminder, Subtasks, Due date, Category, Priority Dot) */}
       <div className="flex items-center gap-2 sm:gap-2.5 flex-shrink-0 text-xs">
+        {/* Reminder Active Indicator */}
+        {task.reminderAt && !task.completed && (
+          <span className="text-brand-500 dark:text-brand-400" title={`Reminder: ${new Date(task.reminderAt).toLocaleString()}`}>
+            <Bell className="h-3.5 w-3.5" />
+          </span>
+        )}
+
         {/* Checklist Count */}
         {subtasks.length > 0 && (
           <span className="text-[11px] font-medium text-neutral-400 dark:text-neutral-500 hidden sm:inline-flex items-center gap-1">

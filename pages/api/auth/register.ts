@@ -1,6 +1,8 @@
 import { NextApiRequest, NextApiResponse } from "next";
 import bcrypt from "bcryptjs";
+import crypto from "crypto";
 import prisma from "@/libs/prismadb";
+import { sendVerificationEmail } from "@/libs/mail";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "POST") {
@@ -31,27 +33,55 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       },
     });
 
-    if (existingUser) {
-      return res.status(422).json({ error: "An account with this email already exists" });
+    // If user exists and is already verified
+    if (existingUser && existingUser.emailVerified) {
+      return res.status(422).json({ error: "An account with this email already exists. Please sign in." });
     }
 
     const hashedPassword = await bcrypt.hash(password, 12);
+    // 6-digit verification code
+    const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const verificationToken = crypto.randomBytes(32).toString("hex");
+    const verificationExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
 
-    const user = await prisma.user.create({
-      data: {
-        email: cleanEmail,
-        name: cleanName,
-        hashedPassword,
-      },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        createdAt: true,
-      },
+    if (existingUser && !existingUser.emailVerified) {
+      // Update pending unverified account
+      await prisma.user.update({
+        where: { id: existingUser.id },
+        data: {
+          name: cleanName,
+          hashedPassword,
+          verificationCode: `${verificationCode}:${verificationToken}`,
+          verificationExpires,
+        },
+      });
+    } else {
+      // Create new unverified account
+      await prisma.user.create({
+        data: {
+          email: cleanEmail,
+          name: cleanName,
+          hashedPassword,
+          emailVerified: null,
+          verificationCode: `${verificationCode}:${verificationToken}`,
+          verificationExpires,
+        },
+      });
+    }
+
+    // Send verification email
+    try {
+      await sendVerificationEmail(cleanName, cleanEmail, verificationCode, verificationToken);
+    } catch (mailError) {
+      console.error("Failed to send verification email:", mailError);
+      return res.status(500).json({ error: "Failed to send verification email. Please check your email configuration." });
+    }
+
+    return res.status(200).json({
+      status: "pending_verification",
+      email: cleanEmail,
+      message: "Verification code sent to your email address.",
     });
-
-    return res.status(201).json(user);
   } catch (error) {
     console.error("Register error:", error);
     return res.status(500).json({ error: "Internal server error" });

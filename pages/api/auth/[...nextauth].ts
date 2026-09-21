@@ -38,6 +38,10 @@ export const authOptions: AuthOptions = {
           throw new Error("Invalid email or password");
         }
 
+        if (!user.emailVerified) {
+          throw new Error("Please verify your email before signing in.");
+        }
+
         return {
           id: user.id,
           name: user.name,

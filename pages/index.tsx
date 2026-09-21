@@ -1,5 +1,7 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import Head from 'next/head';
+import { useRouter } from 'next/router';
+import { toast } from 'react-hot-toast';
 import { Navbar } from '@/components/Navbar';
 import { ViewTabs } from '@/components/ViewTabs';
 import { QuickTaskInput } from '@/components/QuickTaskInput';
@@ -10,7 +12,25 @@ import { AuthModal } from '@/components/AuthModal';
 import { useTasks } from '@/context/TaskContext';
 
 export default function Home() {
-  const { activeTab } = useTasks();
+  const { activeTab, setIsAuthModalOpen, setAuthMode } = useTasks();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (router.query.verified === 'true') {
+      toast.success('Email verified successfully! You can now sign in.');
+      setAuthMode('login');
+      setIsAuthModalOpen(true);
+      router.replace('/', undefined, { shallow: true });
+    } else if (router.query.verified === 'already') {
+      toast.success('Email is already verified. Please sign in.');
+      setAuthMode('login');
+      setIsAuthModalOpen(true);
+      router.replace('/', undefined, { shallow: true });
+    } else if (router.query.verified === 'false') {
+      toast.error('Verification link expired or invalid.');
+      router.replace('/', undefined, { shallow: true });
+    }
+  }, [router.query.verified]);
 
   return (
     <>
