@@ -4,14 +4,18 @@ import { Navbar } from '@/components/Navbar';
 import { ViewTabs } from '@/components/ViewTabs';
 import { QuickTaskInput } from '@/components/QuickTaskInput';
 import { TaskList } from '@/components/TaskList';
+import { CalendarView } from '@/components/CalendarView';
 import { TaskDrawer } from '@/components/TaskDrawer';
 import { AuthModal } from '@/components/AuthModal';
+import { useTasks } from '@/context/TaskContext';
 
 export default function Home() {
+  const { activeTab } = useTasks();
+
   return (
     <>
       <Head>
-        <title>TaskFlow</title>
+        <title>TaskFlow · Minimalist Task Planner</title>
         <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
         <meta name="theme-color" content="#ffffff" />
       </Head>
@@ -23,11 +27,15 @@ export default function Home() {
           {/* 1. Core Focus Tabs & Category Filters */}
           <ViewTabs />
 
-          {/* 2. Frictionless Quick Task Adding Input */}
-          <QuickTaskInput />
-
-          {/* 3. Tranquil Task List */}
-          <TaskList />
+          {/* 2. Dynamic View: Google Calendar Planner or Quick-Add & Task List */}
+          {activeTab === 'calendar' ? (
+            <CalendarView />
+          ) : (
+            <>
+              <QuickTaskInput />
+              <TaskList />
+            </>
+          )}
         </main>
 
         {/* Global Task Drawer / Bottom Sheet */}

@@ -137,12 +137,39 @@ export const TaskDrawer: React.FC = () => {
               <label className="text-[11px] font-semibold text-neutral-400 block mb-1">
                 Due Date
               </label>
-              <input
-                type="date"
-                value={dueDate}
-                onChange={(e) => handleDateChange(e.target.value)}
-                className="w-full px-2.5 py-1.5 rounded-xl bg-neutral-100 dark:bg-neutral-800 text-neutral-900 dark:text-white text-xs outline-none"
-              />
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="date"
+                  value={dueDate}
+                  onChange={(e) => handleDateChange(e.target.value)}
+                  className="w-full px-2.5 py-1.5 rounded-xl bg-neutral-100 dark:bg-neutral-800 text-neutral-900 dark:text-white text-xs outline-none"
+                />
+              </div>
+              <div className="flex items-center gap-1 mt-1.5 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => handleDateChange(new Date().toISOString().split('T')[0])}
+                  className="text-[10px] px-2 py-0.5 rounded-md bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-200 dark:hover:bg-neutral-700 transition"
+                >
+                  Today
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDateChange(new Date(Date.now() + 86400000).toISOString().split('T')[0])}
+                  className="text-[10px] px-2 py-0.5 rounded-md bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-200 dark:hover:bg-neutral-700 transition"
+                >
+                  Tomorrow
+                </button>
+                {dueDate && (
+                  <button
+                    type="button"
+                    onClick={() => handleDateChange('')}
+                    className="text-[10px] px-2 py-0.5 rounded-md text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* Category */}

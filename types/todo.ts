@@ -20,7 +20,7 @@ export interface Task {
   updatedAt: string;
 }
 
-export type ViewTab = 'today' | 'upcoming' | 'all' | 'completed';
+export type ViewTab = 'today' | 'upcoming' | 'calendar' | 'all' | 'completed';
 
 export interface User {
   id: string;
