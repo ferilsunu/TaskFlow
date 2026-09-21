@@ -127,14 +127,16 @@ export const TaskItem: React.FC<TaskItemProps> = ({ task }) => {
           title={`Priority: ${task.priority}`}
         />
 
-        {/* Quick Delete on hover */}
+        {/* Delete Icon for both completed & pending tasks */}
         <button
+          type="button"
           onClick={(e) => {
             e.stopPropagation();
             deleteTask(task.id);
           }}
-          className="opacity-0 group-hover:opacity-100 text-neutral-400 hover:text-rose-500 p-1 transition hidden sm:block"
+          className="p-1 sm:p-1.5 rounded-lg text-neutral-400 hover:text-rose-500 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 active:scale-95 transition flex items-center justify-center"
           title="Delete task"
+          aria-label="Delete task"
         >
           <Trash2 className="h-3.5 w-3.5" />
         </button>
