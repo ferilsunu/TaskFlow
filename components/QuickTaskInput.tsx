@@ -1,14 +1,16 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Plus, Calendar, Flag, Folder, ArrowUp } from 'lucide-react';
 import { useTasks } from '@/context/TaskContext';
 import { Priority } from '@/types/todo';
 
 export const QuickTaskInput: React.FC = () => {
-  const { addTask, activeTab, categories } = useTasks();
+  const { addTask, activeTab, categories, selectedCategory } = useTasks();
   const [title, setTitle] = useState('');
   const [isFocused, setIsFocused] = useState(false);
   const [priority, setPriority] = useState<Priority>('medium');
-  const [category, setCategory] = useState('Inbox');
+  const [category, setCategory] = useState<string>(
+    selectedCategory !== 'all' ? selectedCategory : 'Inbox'
+  );
   const [dueDate, setDueDate] = useState<string | null>(
     activeTab === 'today' ? new Date().toISOString().split('T')[0] : null
   );
@@ -18,6 +20,15 @@ export const QuickTaskInput: React.FC = () => {
   const todayStr = new Date().toISOString().split('T')[0];
   const tomorrowStr = new Date(Date.now() + 86400000).toISOString().split('T')[0];
 
+  // Sync selected category when filter changes
+  useEffect(() => {
+    if (selectedCategory !== 'all') {
+      setCategory(selectedCategory);
+    } else {
+      setCategory('Inbox');
+    }
+  }, [selectedCategory]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) return;
@@ -25,14 +36,25 @@ export const QuickTaskInput: React.FC = () => {
     await addTask({
       title: title.trim(),
       priority,
-      category,
+      category: category || (selectedCategory !== 'all' ? selectedCategory : 'Inbox'),
       dueDate,
     });
 
     setTitle('');
     // reset micro fields
     setPriority('medium');
+    setCategory(selectedCategory !== 'all' ? selectedCategory : 'Inbox');
     if (activeTab !== 'today') setDueDate(null);
+  };
+
+  const getPlaceholder = () => {
+    if (selectedCategory !== 'all') {
+      return `Add a task in ${selectedCategory}... (Press Enter)`;
+    }
+    if (activeTab === 'today') {
+      return "Add a task for today... (Press Enter)";
+    }
+    return "Add a task... (Press Enter)";
   };
 
   return (
@@ -48,11 +70,7 @@ export const QuickTaskInput: React.FC = () => {
           <input
             ref={inputRef}
             type="text"
-            placeholder={
-              activeTab === 'today'
-                ? "Add a task for today... (Press Enter)"
-                : "Add a task... (Press Enter)"
-            }
+            placeholder={getPlaceholder()}
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             onFocus={() => setIsFocused(true)}

@@ -195,7 +195,7 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
         notes: data.notes || '',
         completed: false,
         priority: data.priority || 'medium',
-        category: data.category || 'Inbox',
+        category: data.category || (selectedCategory !== 'all' ? selectedCategory : 'Inbox'),
         dueDate: data.dueDate !== undefined ? data.dueDate : (activeTab === 'today' ? now.split('T')[0] : null),
         subtasks: [],
         createdAt: now,
@@ -213,11 +213,12 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
             priority: newTask.priority,
             category: newTask.category,
             dueDate: newTask.dueDate,
-            subtasks: [],
           });
-          // Update SWR cache with server created object containing true ObjectId
-          mutate('/api/tasks', (current: Task[] = []) =>
-            current.map((t) => (t.id === newTask.id ? res.data : t)),
+          // Replace temp task with confirmed server task
+          mutate(
+            '/api/tasks',
+            (current: Task[] = []) =>
+              current.map((t) => (t.id === newTask.id ? res.data : t)),
             false
           );
         } catch {
@@ -228,7 +229,7 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setLocalTasks((prev) => [newTask, ...prev]);
       }
     },
-    [currentUser, activeTab]
+    [currentUser, activeTab, selectedCategory]
   );
 
   // Update Task

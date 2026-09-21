@@ -34,14 +34,24 @@ import { Task, Priority } from '@/types/todo';
 import { TaskItem } from './TaskItem';
 
 export const CalendarView: React.FC = () => {
-  const { tasks, addTask, updateTask, categories, setSelectedTask } = useTasks();
+  const { tasks, addTask, updateTask, categories, selectedCategory, setSelectedTask } = useTasks();
 
   const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [quickTitle, setQuickTitle] = useState('');
   const [quickPriority, setQuickPriority] = useState<Priority>('medium');
-  const [quickCategory, setQuickCategory] = useState('Inbox');
+  const [quickCategory, setQuickCategory] = useState(
+    selectedCategory !== 'all' ? selectedCategory : 'Inbox'
+  );
   const [viewMode, setViewMode] = useState<'month' | 'agenda'>('month');
+
+  React.useEffect(() => {
+    if (selectedCategory !== 'all') {
+      setQuickCategory(selectedCategory);
+    } else {
+      setQuickCategory('Inbox');
+    }
+  }, [selectedCategory]);
 
   const selectedDateStr = format(selectedDate, 'yyyy-MM-dd');
   const todayStr = format(new Date(), 'yyyy-MM-dd');
@@ -110,6 +120,7 @@ export const CalendarView: React.FC = () => {
 
     setQuickTitle('');
     setQuickPriority('medium');
+    setQuickCategory(selectedCategory !== 'all' ? selectedCategory : 'Inbox');
   };
 
   const handleRescheduleOverdue = async (task: Task) => {
