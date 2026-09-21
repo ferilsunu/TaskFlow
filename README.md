@@ -14,7 +14,7 @@ TaskFlow is a tranquil, psychology-first task management application engineered 
 
 ## 🌐 Live Preview
 
-Experience the live application: **[https://todo.ferilsunu.com](https://todo.ferilsunu.com)**
+Experience the live application: **[https://taskflow.ferilsunu.com](https://taskflow.ferilsunu.com)**
 
 ---
 
@@ -85,8 +85,8 @@ PORT=3004
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/ferilsunu/ToDo-App.git
-cd ToDo-App
+git clone https://github.com/ferilsunu/TaskFlow.git
+cd TaskFlow
 ```
 
 2. Install dependencies:
@@ -121,7 +121,7 @@ npm start
 ## 📁 Project Structure
 
 ```
-ToDo-App/
+TaskFlow/
 ├── components/            # Clean UI components
 │   ├── AuthModal.tsx      # Sign in and sign up modal with Remember Me
 │   ├── EmptyState.tsx     # Tranquil, distraction-free empty state

@@ -97,19 +97,16 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [localTasks, setLocalTasks] = useState<Task[]>([]);
   const [isLocalLoaded, setIsLocalLoaded] = useState(false);
 
-  // Theme initialization
+  // Theme initialization (default to light mode)
   useEffect(() => {
     try {
       const savedTheme = localStorage.getItem(THEME_STORAGE_KEY) as 'light' | 'dark' | null;
-      if (savedTheme) {
-        setTheme(savedTheme);
-        if (savedTheme === 'dark') document.documentElement.classList.add('dark');
-        else document.documentElement.classList.remove('dark');
+      if (savedTheme === 'dark') {
+        setTheme('dark');
+        document.documentElement.classList.add('dark');
       } else {
-        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-        const initial = prefersDark ? 'dark' : 'light';
-        setTheme(initial);
-        if (initial === 'dark') document.documentElement.classList.add('dark');
+        setTheme('light');
+        document.documentElement.classList.remove('dark');
       }
 
       const savedLocal = localStorage.getItem(LOCAL_STORAGE_KEY);

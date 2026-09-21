@@ -82,13 +82,19 @@ export const TaskDrawer: React.FC = () => {
   const subtasks: Subtask[] = selectedTask.subtasks || [];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:justify-end bg-black/40 backdrop-blur-xs animate-fade-in">
+    <div 
+      onClick={() => setSelectedTask(null)}
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:justify-end bg-black/40 backdrop-blur-xs animate-fade-in"
+    >
       <div 
-        className="w-full sm:max-w-md h-[85vh] sm:h-full bg-white dark:bg-neutral-900 border-t sm:border-t-0 sm:border-l border-neutral-200 dark:border-neutral-800 rounded-t-3xl sm:rounded-none shadow-2xl flex flex-col z-50 overflow-hidden"
+        className="w-full sm:max-w-md h-[88vh] sm:h-full bg-white dark:bg-neutral-900 border-t sm:border-t-0 sm:border-l border-neutral-200 dark:border-neutral-800 rounded-t-3xl sm:rounded-none shadow-2xl flex flex-col z-50 overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
+        {/* Mobile Drag Indicator */}
+        <div className="w-10 h-1 rounded-full bg-neutral-300 dark:bg-neutral-700 mx-auto mt-2.5 sm:hidden" />
+
         {/* Drawer Header */}
-        <div className="flex items-center justify-between px-5 py-3.5 border-b border-neutral-100 dark:border-neutral-800/80">
+        <div className="flex items-center justify-between px-5 py-3 sm:py-3.5 border-b border-neutral-100 dark:border-neutral-800/80">
           <div className="flex items-center gap-2 text-xs text-neutral-400">
             <span>Task Details</span>
           </div>
@@ -111,7 +117,7 @@ export const TaskDrawer: React.FC = () => {
         </div>
 
         {/* Drawer Body */}
-        <div className="flex-1 overflow-y-auto p-5 space-y-5">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4 sm:space-y-5 pb-8 sm:pb-5">
           {/* Editable Title */}
           <div>
             <textarea

@@ -19,7 +19,7 @@ export default function Home() {
       <div className="min-h-screen flex flex-col bg-neutral-50 dark:bg-neutral-950 transition-colors selection:bg-neutral-900 selection:text-white dark:selection:bg-white dark:selection:text-neutral-900">
         <Navbar />
 
-        <main className="flex-1 w-full max-w-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
+        <main className="flex-1 w-full max-w-2xl mx-auto px-3.5 sm:px-6 py-4 sm:py-8 space-y-4 sm:space-y-6">
           {/* 1. Core Focus Tabs & Category Filters */}
           <ViewTabs />
 
