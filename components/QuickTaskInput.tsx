@@ -1,5 +1,6 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Plus, Calendar, Flag, Folder, ArrowUp } from 'lucide-react';
+import { format, addDays } from 'date-fns';
 import { useTasks } from '@/context/TaskContext';
 import { Priority } from '@/types/todo';
 
@@ -11,14 +12,15 @@ export const QuickTaskInput: React.FC = () => {
   const [category, setCategory] = useState<string>(
     selectedCategory !== 'all' ? selectedCategory : 'Inbox'
   );
+
+  const todayStr = useMemo(() => format(new Date(), 'yyyy-MM-dd'), []);
+  const tomorrowStr = useMemo(() => format(addDays(new Date(), 1), 'yyyy-MM-dd'), []);
+
   const [dueDate, setDueDate] = useState<string | null>(
-    activeTab === 'today' ? new Date().toISOString().split('T')[0] : null
+    activeTab === 'today' ? todayStr : null
   );
 
   const inputRef = useRef<HTMLInputElement>(null);
-
-  const todayStr = new Date().toISOString().split('T')[0];
-  const tomorrowStr = new Date(Date.now() + 86400000).toISOString().split('T')[0];
 
   // Sync selected category when filter changes
   useEffect(() => {
@@ -29,22 +31,39 @@ export const QuickTaskInput: React.FC = () => {
     }
   }, [selectedCategory]);
 
+  // Sync dueDate when activeTab changes
+  useEffect(() => {
+    if (activeTab === 'today') {
+      setDueDate(todayStr);
+    } else if (activeTab === 'upcoming') {
+      setDueDate(tomorrowStr);
+    } else {
+      setDueDate(null);
+    }
+  }, [activeTab, todayStr, tomorrowStr]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) return;
+
+    const effectiveDueDate = activeTab === 'today' ? (dueDate || todayStr) : dueDate;
 
     await addTask({
       title: title.trim(),
       priority,
       category: category || (selectedCategory !== 'all' ? selectedCategory : 'Inbox'),
-      dueDate,
+      dueDate: effectiveDueDate,
     });
 
     setTitle('');
     // reset micro fields
     setPriority('medium');
     setCategory(selectedCategory !== 'all' ? selectedCategory : 'Inbox');
-    if (activeTab !== 'today') setDueDate(null);
+    if (activeTab === 'today') {
+      setDueDate(todayStr);
+    } else {
+      setDueDate(null);
+    }
   };
 
   const getPlaceholder = () => {

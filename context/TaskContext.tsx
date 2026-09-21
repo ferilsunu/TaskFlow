@@ -3,6 +3,7 @@ import useSWR, { mutate } from 'swr';
 import axios from 'axios';
 import confetti from 'canvas-confetti';
 import { toast } from 'react-hot-toast';
+import { format } from 'date-fns';
 import { Task, ViewTab, Priority, Subtask, User } from '@/types/todo';
 
 const fetcher = (url: string) => axios.get(url).then((res) => res.data);
@@ -189,6 +190,11 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (!title) return;
 
       const now = new Date().toISOString();
+      const todayStr = format(new Date(), 'yyyy-MM-dd');
+      const resolvedDueDate = (activeTab === 'today' && !data.dueDate) 
+        ? todayStr 
+        : (data.dueDate !== undefined ? data.dueDate : null);
+
       const newTask: Task = {
         id: `task-${Date.now()}`,
         title,
@@ -196,7 +202,7 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
         completed: false,
         priority: data.priority || 'medium',
         category: data.category || (selectedCategory !== 'all' ? selectedCategory : 'Inbox'),
-        dueDate: data.dueDate !== undefined ? data.dueDate : (activeTab === 'today' ? now.split('T')[0] : null),
+        dueDate: resolvedDueDate,
         subtasks: [],
         createdAt: now,
         updatedAt: now,
@@ -343,9 +349,9 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Counts for tabs
   const counts = useMemo(() => {
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
     const pending = tasks.filter((t) => !t.completed);
-    const today = pending.filter((t) => t.dueDate === todayStr).length;
+    const today = pending.filter((t) => t.dueDate === todayStr || (t.dueDate && t.dueDate < todayStr)).length;
     const upcoming = pending.filter((t) => t.dueDate && t.dueDate > todayStr).length;
     const all = pending.length;
     const completed = tasks.filter((t) => t.completed).length;

@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { format } from 'date-fns';
 import { TaskItem } from './TaskItem';
 import { EmptyState } from './EmptyState';
 import { useTasks } from '@/context/TaskContext';
@@ -6,7 +7,7 @@ import { useTasks } from '@/context/TaskContext';
 export const TaskList: React.FC = () => {
   const { tasks, activeTab, selectedCategory, searchQuery, isLoading } = useTasks();
 
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = useMemo(() => format(new Date(), 'yyyy-MM-dd'), []);
 
   const filteredTasks = useMemo(() => {
     const list = tasks.filter((task) => {
