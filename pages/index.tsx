@@ -9,10 +9,17 @@ import { TaskList } from '@/components/TaskList';
 import { CalendarView } from '@/components/CalendarView';
 import { TaskDrawer } from '@/components/TaskDrawer';
 import { AuthModal } from '@/components/AuthModal';
+import { CategoryModal } from '@/components/CategoryModal';
 import { useTasks } from '@/context/TaskContext';
 
 export default function Home() {
-  const { activeTab, setIsAuthModalOpen, setAuthMode } = useTasks();
+  const { 
+    activeTab, 
+    setIsAuthModalOpen, 
+    setAuthMode,
+    isCategoryModalOpen,
+    setIsCategoryModalOpen
+  } = useTasks();
   const router = useRouter();
 
   useEffect(() => {
@@ -63,6 +70,12 @@ export default function Home() {
 
         {/* Auth Modal with Remember Me */}
         <AuthModal />
+
+        {/* Category Management Modal */}
+        <CategoryModal 
+          isOpen={isCategoryModalOpen} 
+          onClose={() => setIsCategoryModalOpen(false)} 
+        />
       </div>
     </>
   );

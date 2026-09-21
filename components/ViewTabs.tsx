@@ -1,5 +1,5 @@
 import React from 'react';
-import { Calendar, Clock, CalendarDays, Inbox } from 'lucide-react';
+import { Calendar, Clock, CalendarDays, Inbox, Settings2 } from 'lucide-react';
 import { useTasks } from '@/context/TaskContext';
 import { ViewTab } from '@/types/todo';
 
@@ -10,7 +10,8 @@ export const ViewTabs: React.FC = () => {
     counts, 
     categories, 
     selectedCategory, 
-    setSelectedCategory 
+    setSelectedCategory,
+    setIsCategoryModalOpen
   } = useTasks();
 
   const tabs: { id: ViewTab; label: string; icon: React.ComponentType<{ className?: string }>; count?: number }[] = [
@@ -80,6 +81,15 @@ export const ViewTabs: React.FC = () => {
               {cat}
             </button>
           ))}
+
+          <button
+            onClick={() => setIsCategoryModalOpen(true)}
+            className="px-2 py-1 rounded-full border border-dashed border-neutral-300 dark:border-neutral-700 text-neutral-500 hover:text-neutral-900 dark:hover:text-white hover:border-neutral-400 dark:hover:border-neutral-500 text-[11px] font-medium flex items-center gap-1 transition"
+            title="Manage categories"
+          >
+            <Settings2 className="h-3 w-3" />
+            <span>Edit</span>
+          </button>
         </div>
       )}
     </div>

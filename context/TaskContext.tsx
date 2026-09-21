@@ -4,9 +4,13 @@ import axios from 'axios';
 import confetti from 'canvas-confetti';
 import { toast } from 'react-hot-toast';
 import { format } from 'date-fns';
+import { signOut } from 'next-auth/react';
 import { Task, ViewTab, Priority, Subtask, User } from '@/types/todo';
 
 const fetcher = (url: string) => axios.get(url).then((res) => res.data);
+
+const MAX_CATEGORIES = 7;
+const DEFAULT_CATEGORIES = ['Inbox', 'Work', 'Personal'];
 
 interface TaskContextType {
   tasks: Task[];
@@ -19,6 +23,13 @@ interface TaskContextType {
   searchQuery: string;
   setSearchQuery: (query: string) => void;
   
+  // Category Operations
+  isCategoryModalOpen: boolean;
+  setIsCategoryModalOpen: (open: boolean) => void;
+  addCategory: (name: string) => Promise<void>;
+  editCategory: (oldName: string, newName: string) => Promise<void>;
+  deleteCategory: (name: string) => Promise<void>;
+
   // Auth
   currentUser: User | null;
   isUserLoading: boolean;
@@ -33,7 +44,7 @@ interface TaskContextType {
   toggleTheme: () => void;
 
   // Task Operations
-  addTask: (data: { title: string; notes?: string; priority?: Priority; category?: string; dueDate?: string | null }) => Promise<void>;
+  addTask: (data: { title: string; notes?: string; priority?: Priority; category?: string; dueDate?: string | null; reminderAt?: string | null }) => Promise<void>;
   updateTask: (id: string, updates: Partial<Task>) => Promise<void>;
   toggleTask: (id: string) => Promise<void>;
   deleteTask: (id: string) => Promise<void>;
@@ -57,6 +68,7 @@ interface TaskContextType {
 }
 
 const LOCAL_STORAGE_KEY = 'taskflow_offline_tasks_v3';
+const LOCAL_CATEGORIES_KEY = 'taskflow_categories_v3';
 const THEME_STORAGE_KEY = 'taskflow_theme_v3';
 
 const TaskContext = createContext<TaskContextType | undefined>(undefined);
@@ -71,6 +83,9 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
 
+  // Category Modal
+  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
+
   // Theme
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
 
@@ -84,6 +99,16 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   );
 
+  // Load Categories from API when logged in
+  const { data: serverCategories, mutate: mutateCategories } = useSWR<string[]>(
+    currentUser ? '/api/user/categories' : null,
+    fetcher,
+    {
+      revalidateOnFocus: false,
+      dedupingInterval: 5000,
+    }
+  );
+
   // Load Tasks from API when logged in
   const { data: serverTasks, error: tasksError, isLoading: isTasksLoading, mutate: mutateTasks } = useSWR<Task[]>(
     currentUser ? '/api/tasks' : null,
@@ -94,8 +119,9 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   );
 
-  // Local Offline Tasks (when not logged in)
+  // Local Offline Tasks & Categories (when not logged in)
   const [localTasks, setLocalTasks] = useState<Task[]>([]);
+  const [localCategories, setLocalCategories] = useState<string[]>(DEFAULT_CATEGORIES);
   const [isLocalLoaded, setIsLocalLoaded] = useState(false);
 
   // Theme initialization (default to light mode)
@@ -113,6 +139,11 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const savedLocal = localStorage.getItem(LOCAL_STORAGE_KEY);
       if (savedLocal) {
         setLocalTasks(JSON.parse(savedLocal));
+      }
+
+      const savedCats = localStorage.getItem(LOCAL_CATEGORIES_KEY);
+      if (savedCats) {
+        setLocalCategories(JSON.parse(savedCats));
       }
     } catch {
       // ignore
@@ -132,10 +163,26 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [localTasks, isLocalLoaded, currentUser]);
 
+  // Save local categories when modified (only if guest)
+  useEffect(() => {
+    if (isLocalLoaded && !currentUser) {
+      try {
+        localStorage.setItem(LOCAL_CATEGORIES_KEY, JSON.stringify(localCategories));
+      } catch {
+        // ignore
+      }
+    }
+  }, [localCategories, isLocalLoaded, currentUser]);
+
+  // Toggle Theme
   const toggleTheme = useCallback(() => {
     setTheme((prev) => {
       const next = prev === 'light' ? 'dark' : 'light';
-      localStorage.setItem(THEME_STORAGE_KEY, next);
+      try {
+        localStorage.setItem(THEME_STORAGE_KEY, next);
+      } catch {
+        // ignore
+      }
       if (next === 'dark') {
         document.documentElement.classList.add('dark');
       } else {
@@ -166,6 +213,122 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return localTasks;
   }, [currentUser, serverTasks, localTasks]);
 
+  // Active Categories list (capped at MAX_CATEGORIES)
+  const categories: string[] = useMemo(() => {
+    if (currentUser && Array.isArray(serverCategories) && serverCategories.length > 0) {
+      return serverCategories.slice(0, MAX_CATEGORIES);
+    }
+    return localCategories.slice(0, MAX_CATEGORIES);
+  }, [currentUser, serverCategories, localCategories]);
+
+  // Category Operations: Add Category
+  const addCategory = useCallback(
+    async (name: string) => {
+      const cleanName = name.trim().slice(0, 25);
+      if (!cleanName) return;
+
+      if (categories.length >= MAX_CATEGORIES) {
+        toast.error(`Category limit reached. Maximum ${MAX_CATEGORIES} categories allowed.`);
+        return;
+      }
+
+      if (categories.some((c) => c.toLowerCase() === cleanName.toLowerCase())) {
+        toast.error('Category already exists');
+        return;
+      }
+
+      if (currentUser) {
+        try {
+          const res = await axios.post('/api/user/categories', { name: cleanName });
+          mutate('/api/user/categories', res.data, false);
+          toast.success(`Category "${cleanName}" created`);
+        } catch (err: any) {
+          toast.error(err?.response?.data?.error || 'Failed to create category');
+        }
+      } else {
+        const next = [...localCategories, cleanName];
+        setLocalCategories(next);
+        toast.success(`Category "${cleanName}" created`);
+      }
+    },
+    [categories, currentUser, localCategories]
+  );
+
+  // Category Operations: Edit Category
+  const editCategory = useCallback(
+    async (oldName: string, newName: string) => {
+      const cleanOld = oldName.trim();
+      const cleanNew = newName.trim().slice(0, 25);
+      if (!cleanNew || cleanOld === cleanNew) return;
+
+      if (cleanOld.toLowerCase() === 'inbox') {
+        toast.error('Default Inbox category cannot be renamed');
+        return;
+      }
+
+      if (currentUser) {
+        try {
+          const res = await axios.patch('/api/user/categories', { oldName: cleanOld, newName: cleanNew });
+          mutate('/api/user/categories', res.data, false);
+          mutate('/api/tasks');
+          if (selectedCategory === cleanOld) {
+            setSelectedCategory(cleanNew);
+          }
+          toast.success('Category renamed');
+        } catch (err: any) {
+          toast.error(err?.response?.data?.error || 'Failed to rename category');
+        }
+      } else {
+        const nextCats = localCategories.map((c) => (c === cleanOld ? cleanNew : c));
+        setLocalCategories(nextCats);
+        setLocalTasks((prev) =>
+          prev.map((t) => (t.category === cleanOld ? { ...t, category: cleanNew } : t))
+        );
+        if (selectedCategory === cleanOld) {
+          setSelectedCategory(cleanNew);
+        }
+        toast.success('Category renamed');
+      }
+    },
+    [currentUser, localCategories, selectedCategory]
+  );
+
+  // Category Operations: Delete Category
+  const deleteCategory = useCallback(
+    async (name: string) => {
+      const cleanName = name.trim();
+      if (cleanName.toLowerCase() === 'inbox') {
+        toast.error('Default Inbox category cannot be deleted');
+        return;
+      }
+
+      if (currentUser) {
+        try {
+          const res = await axios.delete('/api/user/categories', { data: { name: cleanName } });
+          mutate('/api/user/categories', res.data, false);
+          mutate('/api/tasks');
+          if (selectedCategory === cleanName) {
+            setSelectedCategory('all');
+          }
+          toast.success(`Category "${cleanName}" removed`);
+        } catch (err: any) {
+          toast.error(err?.response?.data?.error || 'Failed to delete category');
+        }
+      } else {
+        const nextCats = localCategories.filter((c) => c !== cleanName);
+        setLocalCategories(nextCats);
+        setLocalTasks((prev) =>
+          prev.map((t) => (t.category === cleanName ? { ...t, category: 'Inbox' } : t))
+        );
+        if (selectedCategory === cleanName) {
+          setSelectedCategory('all');
+        }
+        toast.success(`Category "${cleanName}" removed`);
+      }
+    },
+    [currentUser, localCategories, selectedCategory]
+  );
+
   // Keep selectedTask in sync with tasks state
   useEffect(() => {
     if (selectedTask) {
@@ -174,18 +337,9 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [tasks]);
 
-  // Dynamic Categories
-  const categories = useMemo(() => {
-    const set = new Set(['Inbox', 'Work', 'Personal', 'Shopping']);
-    tasks.forEach((t) => {
-      if (t.category) set.add(t.category);
-    });
-    return Array.from(set);
-  }, [tasks]);
-
-  // Add Task
+  // Add Task (No emails sent on create - emails are only sent when reminderAt time is triggered)
   const addTask = useCallback(
-    async (data: { title: string; notes?: string; priority?: Priority; category?: string; dueDate?: string | null }) => {
+    async (data: { title: string; notes?: string; priority?: Priority; category?: string; dueDate?: string | null; reminderAt?: string | null }) => {
       const title = data.title.trim();
       if (!title) return;
 
@@ -203,6 +357,8 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
         priority: data.priority || 'medium',
         category: data.category || (selectedCategory !== 'all' ? selectedCategory : 'Inbox'),
         dueDate: resolvedDueDate,
+        reminderAt: data.reminderAt || null,
+        reminderSent: false,
         subtasks: [],
         createdAt: now,
         updatedAt: now,
@@ -219,6 +375,7 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
             priority: newTask.priority,
             category: newTask.category,
             dueDate: newTask.dueDate,
+            reminderAt: newTask.reminderAt,
           });
           // Replace temp task with confirmed server task
           mutate(
@@ -266,12 +423,15 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Toggle Task Completion
   const toggleTask = useCallback(
     async (id: string) => {
-      const task = tasks.find((t) => t.id === id);
-      if (!task) return;
-      const willComplete = !task.completed;
-      if (willComplete) triggerConfetti();
+      const target = tasks.find((t) => t.id === id);
+      if (!target) return;
+      const nextCompleted = !target.completed;
 
-      await updateTask(id, { completed: willComplete });
+      if (nextCompleted) {
+        triggerConfetti();
+      }
+
+      await updateTask(id, { completed: nextCompleted });
     },
     [tasks, updateTask, triggerConfetti]
   );
@@ -279,10 +439,16 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Delete Task
   const deleteTask = useCallback(
     async (id: string) => {
-      if (selectedTask?.id === id) setSelectedTask(null);
+      if (selectedTask?.id === id) {
+        setSelectedTask(null);
+      }
 
       if (currentUser) {
-        mutate('/api/tasks', (current: Task[] = []) => current.filter((t) => t.id !== id), false);
+        mutate(
+          '/api/tasks',
+          (current: Task[] = []) => current.filter((t) => t.id !== id),
+          false
+        );
         try {
           await axios.delete(`/api/tasks/${id}`);
           toast.success('Task deleted');
@@ -298,49 +464,60 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
     [currentUser, selectedTask]
   );
 
-  // Subtask operations
+  // Subtask: Toggle Subtask
   const toggleSubtask = useCallback(
     async (taskId: string, subtaskId: string) => {
       const task = tasks.find((t) => t.id === taskId);
-      if (!task) return;
-      const currentSubtasks = task.subtasks || [];
-      const updated = currentSubtasks.map((st) => (st.id === subtaskId ? { ...st, completed: !st.completed } : st));
-      await updateTask(taskId, { subtasks: updated });
+      if (!task || !task.subtasks) return;
+
+      const updatedSubtasks = task.subtasks.map((st) =>
+        st.id === subtaskId ? { ...st, completed: !st.completed } : st
+      );
+
+      await updateTask(taskId, { subtasks: updatedSubtasks });
     },
     [tasks, updateTask]
   );
 
+  // Subtask: Add Subtask
   const addSubtask = useCallback(
     async (taskId: string, title: string) => {
       const task = tasks.find((t) => t.id === taskId);
-      if (!task || !title.trim()) return;
-      const newSub: Subtask = {
-        id: `sub-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+      if (!task) return;
+
+      const newSubtask: Subtask = {
+        id: `subtask-${Date.now()}`,
         title: title.trim(),
         completed: false,
       };
-      const updated = [...(task.subtasks || []), newSub];
-      await updateTask(taskId, { subtasks: updated });
+
+      const currentSubtasks = task.subtasks || [];
+      const updatedSubtasks = [...currentSubtasks, newSubtask];
+
+      await updateTask(taskId, { subtasks: updatedSubtasks });
     },
     [tasks, updateTask]
   );
 
+  // Subtask: Delete Subtask
   const deleteSubtask = useCallback(
     async (taskId: string, subtaskId: string) => {
       const task = tasks.find((t) => t.id === taskId);
-      if (!task) return;
-      const updated = (task.subtasks || []).filter((st) => st.id !== subtaskId);
-      await updateTask(taskId, { subtasks: updated });
+      if (!task || !task.subtasks) return;
+
+      const updatedSubtasks = task.subtasks.filter((st) => st.id !== subtaskId);
+      await updateTask(taskId, { subtasks: updatedSubtasks });
     },
     [tasks, updateTask]
   );
 
+  // Logout
   const logout = useCallback(async () => {
     try {
-      const { signOut } = await import('next-auth/react');
       await signOut({ redirect: false });
       mutate('/api/user/current', null, false);
       mutate('/api/tasks', [], false);
+      mutate('/api/user/categories', null, false);
       toast.success('Signed out');
     } catch {
       // ignore
@@ -371,6 +548,11 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
         categories,
         searchQuery,
         setSearchQuery,
+        isCategoryModalOpen,
+        setIsCategoryModalOpen,
+        addCategory,
+        editCategory,
+        deleteCategory,
         currentUser: currentUser || null,
         isUserLoading,
         isAuthModalOpen,
