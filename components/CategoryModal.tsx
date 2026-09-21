@@ -98,6 +98,7 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({ isOpen, onClose })
             <input
               type="text"
               maxLength={25}
+              enterKeyHint="done"
               placeholder="New category name..."
               value={newCatName}
               onChange={(e) => setNewCatName(e.target.value)}

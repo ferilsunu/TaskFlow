@@ -107,8 +107,8 @@ export const CalendarView: React.FC = () => {
     setSelectedDate(today);
   };
 
-  const handleAddDayTask = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleAddDayTask = async (e?: React.FormEvent | React.KeyboardEvent) => {
+    if (e) e.preventDefault();
     if (!quickTitle.trim()) return;
 
     await addTask({
@@ -373,11 +373,19 @@ export const CalendarView: React.FC = () => {
             <Plus className="h-4 w-4 text-neutral-400 flex-shrink-0" />
             <input
               type="text"
+              enterKeyHint="done"
               placeholder={`Add task for ${format(selectedDate, 'MMM d')}... (Press Enter)`}
               value={quickTitle}
               onChange={(e) => setQuickTitle(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.keyCode === 13) {
+                  e.preventDefault();
+                  handleAddDayTask(e);
+                }
+              }}
               className="flex-1 bg-transparent text-xs sm:text-sm text-neutral-900 dark:text-white placeholder-neutral-400 outline-none py-1"
             />
+            <button type="submit" className="hidden" aria-hidden="true" tabIndex={-1} />
             {quickTitle.trim() && (
               <button
                 type="submit"

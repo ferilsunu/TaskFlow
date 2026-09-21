@@ -339,6 +339,7 @@ export const TaskDrawer: React.FC = () => {
               <form onSubmit={handleAddSubtask} className="flex items-center gap-2 pt-1">
                 <input
                   type="text"
+                  enterKeyHint="done"
                   placeholder="Add item..."
                   value={newSubtaskTitle}
                   onChange={(e) => setNewSubtaskTitle(e.target.value)}

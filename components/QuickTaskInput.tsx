@@ -42,8 +42,8 @@ export const QuickTaskInput: React.FC = () => {
     }
   }, [activeTab, todayStr, tomorrowStr]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (e?: React.FormEvent | React.KeyboardEvent) => {
+    if (e) e.preventDefault();
     if (!title.trim()) return;
 
     const effectiveDueDate = activeTab === 'today' ? (dueDate || todayStr) : dueDate;
@@ -63,6 +63,13 @@ export const QuickTaskInput: React.FC = () => {
       setDueDate(todayStr);
     } else {
       setDueDate(null);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' || e.keyCode === 13) {
+      e.preventDefault();
+      handleSubmit(e);
     }
   };
 
@@ -89,12 +96,17 @@ export const QuickTaskInput: React.FC = () => {
           <input
             ref={inputRef}
             type="text"
+            enterKeyHint="done"
             placeholder={getPlaceholder()}
             value={title}
             onChange={(e) => setTitle(e.target.value)}
+            onKeyDown={handleKeyDown}
             onFocus={() => setIsFocused(true)}
             className="flex-1 bg-transparent text-sm sm:text-base text-neutral-900 dark:text-white placeholder-neutral-400 dark:placeholder-neutral-500 outline-none py-1.5"
           />
+
+          {/* Hidden submit button to guarantee native mobile keyboard form submission */}
+          <button type="submit" className="hidden" aria-hidden="true" tabIndex={-1} />
 
           {/* Submit Button (Only visible when title has text on mobile/desktop) */}
           {title.trim() && (
