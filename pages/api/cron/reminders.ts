@@ -25,12 +25,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     const now = new Date();
 
-    // Find all uncompleted tasks where reminderAt is due and reminder has not been sent
+    // Find all uncompleted tasks where reminderAt is explicitly set and due
     const pendingReminders = await prisma.task.findMany({
       where: {
         completed: false,
         reminderSent: false,
         reminderAt: {
+          not: null,
           lte: now,
         },
       },
@@ -49,6 +50,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     let sentCount = 0;
 
     for (const task of pendingReminders) {
+      // Guard: strictly require a valid reminderAt date
+      if (!task.reminderAt) {
+        await prisma.task.update({
+          where: { id: task.id },
+          data: { reminderSent: true },
+        });
+        continue;
+      }
+
       if (task.user && task.user.email && task.user.emailVerified) {
         try {
           await sendTaskReminderEmail(

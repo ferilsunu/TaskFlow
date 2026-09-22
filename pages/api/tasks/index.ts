@@ -32,6 +32,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(400).json({ error: "Task title is required" });
       }
 
+      const hasReminder = Boolean(reminderAt && !isNaN(new Date(reminderAt).getTime()));
+
       const task = await prisma.task.create({
         data: {
           title: title.trim().slice(0, 300),
@@ -40,8 +42,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           priority: typeof priority === "string" ? priority : "medium",
           category: typeof category === "string" && category.trim() ? category.trim().slice(0, 50) : "Inbox",
           dueDate: typeof dueDate === "string" && dueDate ? dueDate.slice(0, 20) : null,
-          reminderAt: reminderAt ? new Date(reminderAt) : null,
-          reminderSent: false,
+          reminderAt: hasReminder ? new Date(reminderAt) : null,
+          reminderSent: !hasReminder,
           subtasks: Array.isArray(subtasks) ? subtasks : [],
           userId: currentUser.id,
         },

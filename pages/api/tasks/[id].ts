@@ -42,8 +42,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (category !== undefined && typeof category === "string") dataToUpdate.category = category.trim().slice(0, 50);
       if (dueDate !== undefined) dataToUpdate.dueDate = typeof dueDate === "string" && dueDate ? dueDate.slice(0, 20) : null;
       if (reminderAt !== undefined) {
-        dataToUpdate.reminderAt = reminderAt ? new Date(reminderAt) : null;
-        dataToUpdate.reminderSent = false;
+        const hasReminder = Boolean(reminderAt && !isNaN(new Date(reminderAt).getTime()));
+        dataToUpdate.reminderAt = hasReminder ? new Date(reminderAt) : null;
+        dataToUpdate.reminderSent = !hasReminder;
       }
       if (subtasks !== undefined) dataToUpdate.subtasks = Array.isArray(subtasks) ? subtasks : [];
 
