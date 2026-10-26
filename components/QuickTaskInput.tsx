@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { Plus, Calendar, Flag, Folder, ArrowUp } from 'lucide-react';
-import { format, addDays } from 'date-fns';
+import { Plus, Calendar, Flag, Folder, ArrowUp, Bell, X, Check } from 'lucide-react';
+import { format, addDays, addHours, isToday, isTomorrow } from 'date-fns';
 import { useTasks } from '@/context/TaskContext';
 import { Priority } from '@/types/todo';
 
@@ -19,6 +19,10 @@ export const QuickTaskInput: React.FC = () => {
   const [dueDate, setDueDate] = useState<string | null>(
     activeTab === 'today' ? todayStr : null
   );
+
+  // Email Reminder state
+  const [reminderAt, setReminderAt] = useState<string | null>(null);
+  const [showReminderPicker, setShowReminderPicker] = useState(false);
 
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -53,12 +57,15 @@ export const QuickTaskInput: React.FC = () => {
       priority,
       category: category || (selectedCategory !== 'all' ? selectedCategory : 'Inbox'),
       dueDate: effectiveDueDate,
+      reminderAt: reminderAt ? new Date(reminderAt).toISOString() : null,
     });
 
     setTitle('');
     // reset micro fields
     setPriority('medium');
     setCategory(selectedCategory !== 'all' ? selectedCategory : 'Inbox');
+    setReminderAt(null);
+    setShowReminderPicker(false);
     if (activeTab === 'today') {
       setDueDate(todayStr);
     } else {
@@ -81,6 +88,39 @@ export const QuickTaskInput: React.FC = () => {
       return "Add a task for today... (Press Enter)";
     }
     return "Add a task... (Press Enter)";
+  };
+
+  const formatReminderDisplay = (isoString: string) => {
+    try {
+      const d = new Date(isoString);
+      if (isNaN(d.getTime())) return 'Reminder';
+      if (isToday(d)) {
+        return `Today, ${format(d, 'h:mm a')}`;
+      }
+      if (isTomorrow(d)) {
+        return `Tmrw, ${format(d, 'h:mm a')}`;
+      }
+      return format(d, 'MMM d, h:mm a');
+    } catch {
+      return 'Reminder';
+    }
+  };
+
+  const formatForDateTimeInput = (d: Date) => {
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  };
+
+  const setPresetReminder = (offsetHours: number) => {
+    const d = addHours(new Date(), offsetHours);
+    setReminderAt(d.toISOString());
+  };
+
+  const setTomorrowMorningReminder = () => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    d.setHours(9, 0, 0, 0);
+    setReminderAt(d.toISOString());
   };
 
   return (
@@ -120,8 +160,8 @@ export const QuickTaskInput: React.FC = () => {
           )}
         </div>
 
-        {/* Sleek Optional Micro-chips (Visible when focused or text is typed) */}
-        {(isFocused || title.trim()) && (
+        {/* Sleek Optional Micro-chips (Visible when focused, text typed, or reminder active) */}
+        {(isFocused || title.trim() || reminderAt || showReminderPicker) && (
           <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-neutral-100 dark:border-neutral-800/80 text-xs text-neutral-600 dark:text-neutral-400 animate-fade-in pl-1">
             {/* Quick Due Date Chips */}
             <button
@@ -179,6 +219,105 @@ export const QuickTaskInput: React.FC = () => {
               </select>
               <Folder className="h-3 w-3 absolute left-2 pointer-events-none text-neutral-400" />
             </div>
+
+            {/* Email Reminder Chip */}
+            {reminderAt ? (
+              <div className="flex items-center gap-1 px-2.5 py-1 rounded-lg border text-[11px] font-semibold bg-brand-50 dark:bg-brand-950/60 border-brand-300 dark:border-brand-800 text-brand-700 dark:text-brand-300 transition">
+                <Bell className="h-3 w-3 text-brand-600 dark:text-brand-400" />
+                <button
+                  type="button"
+                  onClick={() => setShowReminderPicker((prev) => !prev)}
+                  className="hover:underline"
+                  title="Click to change reminder time"
+                >
+                  {formatReminderDisplay(reminderAt)}
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setReminderAt(null);
+                    setShowReminderPicker(false);
+                  }}
+                  className="ml-1 text-neutral-400 hover:text-rose-500 transition"
+                  title="Remove reminder"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setShowReminderPicker((prev) => !prev)}
+                className={`flex items-center gap-1 px-2.5 py-1 rounded-lg border text-[11px] font-medium transition ${
+                  showReminderPicker
+                    ? 'bg-brand-50 dark:bg-brand-950/60 border-brand-300 dark:border-brand-800 text-brand-700 dark:text-brand-300 font-bold'
+                    : 'border-neutral-200 dark:border-neutral-800 hover:bg-neutral-50 dark:hover:bg-neutral-800 text-neutral-700 dark:text-neutral-300'
+                }`}
+                title="Add email reminder"
+              >
+                <Bell className="h-3 w-3 text-neutral-400" />
+                <span>Reminder</span>
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Expandable Reminder Picker Tray */}
+        {showReminderPicker && (
+          <div className="flex flex-wrap items-center gap-2 pt-2 pb-0.5 border-t border-neutral-100 dark:border-neutral-800/80 text-xs animate-fade-in pl-1">
+            <div className="flex items-center gap-1 text-[11px] font-medium text-neutral-500 dark:text-neutral-400">
+              <Bell className="h-3.5 w-3.5 text-brand-500" />
+              <span>Email Reminder:</span>
+            </div>
+
+            {/* Quick Presets */}
+            <button
+              type="button"
+              onClick={() => {
+                setPresetReminder(1);
+                setShowReminderPicker(false);
+              }}
+              className="px-2 py-0.5 rounded-md bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 dark:hover:bg-neutral-700 text-neutral-700 dark:text-neutral-300 text-[11px] font-medium transition"
+            >
+              In 1 Hour
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setTomorrowMorningReminder();
+                setShowReminderPicker(false);
+              }}
+              className="px-2 py-0.5 rounded-md bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 dark:hover:bg-neutral-700 text-neutral-700 dark:text-neutral-300 text-[11px] font-medium transition"
+            >
+              Tomorrow 9 AM
+            </button>
+
+            {/* Datetime Local Picker */}
+            <input
+              type="datetime-local"
+              value={reminderAt ? formatForDateTimeInput(new Date(reminderAt)) : ''}
+              min={formatForDateTimeInput(new Date())}
+              onChange={(e) => {
+                if (e.target.value) {
+                  setReminderAt(new Date(e.target.value).toISOString());
+                } else {
+                  setReminderAt(null);
+                }
+              }}
+              className="px-2 py-0.5 rounded-md border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-neutral-800 dark:text-neutral-200 text-[11px] outline-none"
+            />
+
+            {/* Done Button to close tray */}
+            <button
+              type="button"
+              onClick={() => setShowReminderPicker(false)}
+              className="ml-auto flex items-center gap-1 px-2 py-0.5 rounded-md bg-brand-500 hover:bg-brand-600 text-white text-[11px] font-medium transition"
+            >
+              <Check className="h-3 w-3" />
+              <span>Done</span>
+            </button>
           </div>
         )}
       </form>
