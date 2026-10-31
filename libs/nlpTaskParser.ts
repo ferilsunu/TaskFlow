@@ -20,8 +20,8 @@ export interface ParsedTaskResult {
 /**
  * Parses natural language input for task creation:
  * - Dates / times: e.g. "tomorrow at 5pm", "next monday", "friday at 10am", "in 2 hours", "today"
- * - Priority tags: e.g. "!urgent", "!high", "!medium", "!low", "!p1", "!p2", "!p3", "!p4", "!1", "!2", "!3", "!4"
- * - Category tags: e.g. "#Work", "#Personal", "#shopping"
+ * - Priority tags: e.g. "!urgent", "!critical", "!high", "!important", "!medium", "!low", "!p1"–"!p4", "!1"–"!4"
+ * - Category tags: e.g. "#Work", "#Personal", "#side-project", "#DeepWork"
  */
 export function parseQuickTask(
   input: string,
@@ -50,44 +50,58 @@ export function parseQuickTask(
   let dueDate: string | null = null;
   let reminderAt: string | null = null;
 
-  // 1. Priority match: !urgent, !high, !medium, !med, !low, !p1..p4, !1..4
-  // Allows optional trailing comma/semicolon/period before space or end
-  const prioRegex = /(?:^|\s)!(urgent|high|medium|med|low|p[1-4]|[1-4])[,;.]?(?=\s|$)/i;
-  const prioMatch = text.match(prioRegex);
-  if (prioMatch) {
-    const rawMatch = prioMatch[0].trim();
-    priorityText = rawMatch.replace(/[,;.]$/, '');
-    const val = prioMatch[1].toLowerCase();
-    if (val === 'urgent' || val === 'p1' || val === '1') priority = 'urgent';
-    else if (val === 'high' || val === 'p2' || val === '2') priority = 'high';
-    else if (val === 'medium' || val === 'med' || val === 'p3' || val === '3') priority = 'medium';
-    else if (val === 'low' || val === 'p4' || val === '4') priority = 'low';
+  // 1. Priority mapping and rank: urgent (4) > high (3) > medium (2) > low (1)
+  const priorityRank: Record<Priority, number> = { urgent: 4, high: 3, medium: 2, low: 1 };
+  const prioRegex = /(?:^|\s)!(urgent|critical|high|important|medium|med|low|p[1-4]|[1-4])[,;.]?(?=\s|$)/gi;
 
-    // Remove the priority tag from text
-    text = text.replace(prioMatch[0], ' ');
+  const prioMatches: RegExpExecArray[] = [];
+  let prioMatch: RegExpExecArray | null;
+  while ((prioMatch = prioRegex.exec(text)) !== null) {
+    prioMatches.push(prioMatch);
   }
 
-  // 2. Category match: #TagName (must begin with a letter so issue numbers like #123 aren't tagged)
-  // Allows optional trailing comma/semicolon/period before space or end
-  const catRegex = /(?:^|\s)#([a-zA-Z][a-zA-Z0-9_-]*)[,;.]?(?=\s|$)/i;
+  if (prioMatches.length > 0) {
+    let highestRank = 0;
+    for (const match of prioMatches) {
+      const val = match[1].toLowerCase();
+      let p: Priority | null = null;
+      if (val === 'urgent' || val === 'critical' || val === 'p1' || val === '1') p = 'urgent';
+      else if (val === 'high' || val === 'important' || val === 'p2' || val === '2') p = 'high';
+      else if (val === 'medium' || val === 'med' || val === 'p3' || val === '3') p = 'medium';
+      else if (val === 'low' || val === 'p4' || val === '4') p = 'low';
+
+      if (p && priorityRank[p] > highestRank) {
+        highestRank = priorityRank[p];
+        priority = p;
+        priorityText = match[0].trim().replace(/[,;.]$/, '');
+      }
+    }
+    // Strip all priority tags
+    text = text.replace(prioRegex, ' ');
+  }
+
+  // 2. Category match: #TagName with preposition cleanup and normalized matching
+  const catRegex = /(?:^|\s)(?:(for|in|under|to)\s+)?#([a-zA-Z][a-zA-Z0-9_-]*)[,;.]?(?=\s|$)/i;
   const catMatch = text.match(catRegex);
   if (catMatch) {
     const rawMatch = catMatch[0].trim();
-    categoryText = rawMatch.replace(/[,;.]$/, '');
-    const rawName = catMatch[1];
+    categoryText = (rawMatch.startsWith('#') ? rawMatch : rawMatch.slice(rawMatch.indexOf('#'))).replace(/[,;.]$/, '');
+    const rawName = catMatch[2];
+
+    // Exact or normalized match against availableCategories (supports hyphenated & camelCase matching)
+    const normalize = (s: string) => s.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
     const existing = availableCategories.find(
-      (c) => c.toLowerCase() === rawName.toLowerCase()
+      (c) => normalize(c) === normalize(rawName)
     );
     category = existing || rawName;
 
-    // Remove the category tag from text
     text = text.replace(catMatch[0], ' ');
   }
 
   // 3. Date / Time match using chrono-node
   // Use forwardDate: true so day names (e.g. "Friday") resolve to the upcoming occurrence
   const rawChronoResults = chrono.parse(text, baseDate, { forwardDate: true });
-  // Filter out duration phrases like "for 30 minutes", "for 2 hours" which are task descriptions, not schedule times
+  // Filter out duration phrases like "for 30 minutes", "for 2 hours"
   const chronoResults = rawChronoResults.filter(
     (r) => !/^for\s+\d+\s*(m|min|minute|h|hour|sec|second|d|day)s?/i.test(r.text.trim())
   );
@@ -127,11 +141,19 @@ export function parseQuickTask(
       dateText = dateTexts.join(' ');
     }
 
-    // Strip date parts and any immediate preceding prepositions (by, due, on, for, at, around)
+    // Strip date parts and any immediate preceding prepositions or enclosing brackets
     for (const r of sorted) {
       let before = text.slice(0, r.index);
       let after = text.slice(r.index + r.text.length);
-      const prepMatch = before.match(/(?:^|\s)(by|due|on|for|at|around)\s+$/i);
+
+      // Check if enclosed in parentheses: ( ... )
+      if (before.trimEnd().endsWith('(') && after.trimStart().startsWith(')')) {
+        before = before.slice(0, before.lastIndexOf('('));
+        after = after.slice(after.indexOf(')') + 1);
+      }
+
+      // Check for preceding prepositions or punctuation: by, due:, due, until, before, on, for, at, around, @, -, :
+      const prepMatch = before.match(/(?:^|\s)(by|due:?|until|before|on|for|at|around|@|[-:,])\s*$/i);
       if (prepMatch) {
         before = before.slice(0, before.length - prepMatch[0].length);
       }
@@ -141,7 +163,7 @@ export function parseQuickTask(
 
   // 4. Clean title
   let cleanTitle = text.replace(/\s+/g, ' ').trim();
-  // If stripping left nothing (e.g. user literally typed "!urgent" or "tomorrow"), fallback to input
+  cleanTitle = cleanTitle.replace(/[,;:\-–—]+$/, '').trim();
   if (!cleanTitle) {
     cleanTitle = input.trim();
   }
