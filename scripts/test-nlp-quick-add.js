@@ -1,138 +1,10 @@
 const assert = require('assert');
-const chrono = require('chrono-node');
-const { format } = require('date-fns');
-
-function parseQuickTask(
-  input,
-  availableCategories = ['Inbox', 'Work', 'Personal'],
-  baseDate = new Date('2026-10-31T09:00:00.000Z')
-) {
-  if (!input || !input.trim()) {
-    return {
-      originalInput: input || '',
-      cleanTitle: '',
-      dueDate: null,
-      reminderAt: null,
-      priority: null,
-      category: null,
-      hasMatch: false,
-      extractedTags: {},
-    };
-  }
-
-  let text = input;
-  let priority = null;
-  let priorityText;
-  let category = null;
-  let categoryText;
-  let dateText;
-  let dueDate = null;
-  let reminderAt = null;
-
-  // 1. Priority match
-  const prioRegex = /(?:^|\s)!(urgent|high|medium|med|low|p[1-4]|[1-4])[,;.]?(?=\s|$)/i;
-  const prioMatch = text.match(prioRegex);
-  if (prioMatch) {
-    const rawMatch = prioMatch[0].trim();
-    priorityText = rawMatch.replace(/[,;.]$/, '');
-    const val = prioMatch[1].toLowerCase();
-    if (val === 'urgent' || val === 'p1' || val === '1') priority = 'urgent';
-    else if (val === 'high' || val === 'p2' || val === '2') priority = 'high';
-    else if (val === 'medium' || val === 'med' || val === 'p3' || val === '3') priority = 'medium';
-    else if (val === 'low' || val === 'p4' || val === '4') priority = 'low';
-
-    text = text.replace(prioMatch[0], ' ');
-  }
-
-  // 2. Category match
-  const catRegex = /(?:^|\s)#([a-zA-Z][a-zA-Z0-9_-]*)[,;.]?(?=\s|$)/i;
-  const catMatch = text.match(catRegex);
-  if (catMatch) {
-    const rawMatch = catMatch[0].trim();
-    categoryText = rawMatch.replace(/[,;.]$/, '');
-    const rawName = catMatch[1];
-    const existing = availableCategories.find(
-      (c) => c.toLowerCase() === rawName.toLowerCase()
-    );
-    category = existing || rawName;
-
-    text = text.replace(catMatch[0], ' ');
-  }
-
-  // 3. Date / Time match using chrono-node
-  const rawChronoResults = chrono.parse(text, baseDate, { forwardDate: true });
-  const chronoResults = rawChronoResults.filter(
-    (r) => !/^for\s+\d+\s*(m|min|minute|h|hour|sec|second|d|day)s?/i.test(r.text.trim())
-  );
-
-  if (chronoResults.length > 0) {
-    const sorted = [...chronoResults].sort((a, b) => b.index - a.index);
-
-    let combinedDate = null;
-    let hasCertainHour = false;
-    const dateTexts = [];
-
-    for (const res of chronoResults) {
-      dateTexts.push(res.text.trim());
-      const d = res.start.date();
-      if (!combinedDate) {
-        combinedDate = new Date(d);
-      } else {
-        if (res.start.isCertain('hour')) {
-          combinedDate.setHours(d.getHours(), d.getMinutes(), d.getSeconds(), 0);
-        }
-        if (res.start.isCertain('day') && !hasCertainHour) {
-          combinedDate.setFullYear(d.getFullYear(), d.getMonth(), d.getDate());
-        }
-      }
-      if (res.start.isCertain('hour')) {
-        hasCertainHour = true;
-      }
-    }
-
-    if (combinedDate) {
-      dueDate = format(combinedDate, 'yyyy-MM-dd');
-      if (hasCertainHour) {
-        reminderAt = combinedDate.toISOString();
-      }
-      dateText = dateTexts.join(' ');
-    }
-
-    for (const r of sorted) {
-      let before = text.slice(0, r.index);
-      let after = text.slice(r.index + r.text.length);
-      const prepMatch = before.match(/(?:^|\s)(by|due|on|for|at|around)\s+$/i);
-      if (prepMatch) {
-        before = before.slice(0, before.length - prepMatch[0].length);
-      }
-      text = before + ' ' + after;
-    }
-  }
-
-  let cleanTitle = text.replace(/\s+/g, ' ').trim();
-  if (!cleanTitle) {
-    cleanTitle = input.trim();
-  }
-
-  const hasMatch = Boolean(priority || category || dueDate);
-
-  return {
-    originalInput: input,
-    cleanTitle,
-    dueDate,
-    reminderAt,
-    priority,
-    category,
-    hasMatch,
-    extractedTags: {
-      dateText,
-      priorityText,
-      categoryText,
-    },
-  };
-}
+const path = require('path');
+const jiti = require('jiti')(path.resolve(__dirname, 'test-nlp-quick-add.js'));
+const { parseQuickTask } = jiti(path.resolve(__dirname, '../libs/nlpTaskParser.ts'));
 
 const fixedBaseDate = new Date('2026-10-31T09:00:00.000Z'); // Saturday, Oct 31, 2026
+const testCategories = ['Inbox', 'Work', 'Personal', 'Side Project', 'Deep Work'];
 
 const testCases = [
   {
@@ -303,16 +175,161 @@ const testCases = [
       hasReminder: false,
     },
   },
+  // Additional comprehensive edge case tests
+  {
+    name: 'Preposition with colon due: tomorrow',
+    input: 'Submit quarterly report due: tomorrow',
+    expected: {
+      cleanTitle: 'Submit quarterly report',
+      dueDate: '2026-11-01',
+      priority: null,
+      category: null,
+      hasMatch: true,
+      hasReminder: false,
+    },
+  },
+  {
+    name: 'Date enclosed in parentheses (tomorrow at 5pm)',
+    input: 'Review PR (tomorrow at 5pm)',
+    expected: {
+      cleanTitle: 'Review PR',
+      dueDate: '2026-11-01',
+      priority: null,
+      category: null,
+      hasMatch: true,
+      hasReminder: true,
+    },
+  },
+  {
+    name: 'Trailing comma before date',
+    input: 'Order team lunch, tomorrow',
+    expected: {
+      cleanTitle: 'Order team lunch',
+      dueDate: '2026-11-01',
+      priority: null,
+      category: null,
+      hasMatch: true,
+      hasReminder: false,
+    },
+  },
+  {
+    name: 'Trailing dash before date',
+    input: 'Draft newsletter - tomorrow at 3pm',
+    expected: {
+      cleanTitle: 'Draft newsletter',
+      dueDate: '2026-11-01',
+      priority: null,
+      category: null,
+      hasMatch: true,
+      hasReminder: true,
+    },
+  },
+  {
+    name: 'Time with @ symbol (@ 3pm)',
+    input: 'Quick standup @ 3pm !high',
+    expected: {
+      cleanTitle: 'Quick standup',
+      dueDate: '2026-10-31',
+      priority: 'high',
+      category: null,
+      hasMatch: true,
+      hasReminder: true,
+    },
+  },
+  {
+    name: 'Preposition until with date',
+    input: 'Submit tax documents until April 15',
+    expected: {
+      cleanTitle: 'Submit tax documents',
+      dueDate: '2027-04-15',
+      priority: null,
+      category: null,
+      hasMatch: true,
+      hasReminder: false,
+    },
+  },
+  {
+    name: 'Preposition before with date',
+    input: 'Clean garage before Sunday',
+    expected: {
+      cleanTitle: 'Clean garage',
+      dueDate: '2026-11-01',
+      priority: null,
+      category: null,
+      hasMatch: true,
+      hasReminder: false,
+    },
+  },
+  {
+    name: 'Multi-word category with hyphen matching existing category (#side-project)',
+    input: 'Update roadmap #side-project !urgent',
+    expected: {
+      cleanTitle: 'Update roadmap',
+      dueDate: null,
+      priority: 'urgent',
+      category: 'Side Project',
+      hasMatch: true,
+      hasReminder: false,
+    },
+  },
+  {
+    name: 'Multi-word category camelCase matching (#DeepWork)',
+    input: 'Block focus calendar #DeepWork tomorrow',
+    expected: {
+      cleanTitle: 'Block focus calendar',
+      dueDate: '2026-11-01',
+      priority: null,
+      category: 'Deep Work',
+      hasMatch: true,
+      hasReminder: false,
+    },
+  },
+  {
+    name: 'Multiple priority tags in single string: take highest and strip all',
+    input: 'Deploy hotfix !medium !urgent to servers',
+    expected: {
+      cleanTitle: 'Deploy hotfix to servers',
+      dueDate: null,
+      priority: 'urgent',
+      category: null,
+      hasMatch: true,
+      hasReminder: false,
+    },
+  },
+  {
+    name: 'Aliases !critical (urgent) and !important (high)',
+    input: 'Renew domain cert !critical',
+    expected: {
+      cleanTitle: 'Renew domain cert',
+      dueDate: null,
+      priority: 'urgent',
+      category: null,
+      hasMatch: true,
+      hasReminder: false,
+    },
+  },
+  {
+    name: 'Dangling preposition before stripped category tag (for #Work)',
+    input: 'Prepare slide deck for #Work',
+    expected: {
+      cleanTitle: 'Prepare slide deck',
+      dueDate: null,
+      priority: null,
+      category: 'Work',
+      hasMatch: true,
+      hasReminder: false,
+    },
+  },
 ];
 
 let passed = 0;
 let failed = 0;
 
-console.log('--- Running NLP Task Parser Unit Tests ---\n');
+console.log('--- Running NLP Task Parser Unit Tests (Direct TypeScript Execution via jiti) ---\n');
 
 for (const tc of testCases) {
   try {
-    const res = parseQuickTask(tc.input, ['Inbox', 'Work', 'Personal'], fixedBaseDate);
+    const res = parseQuickTask(tc.input, testCategories, fixedBaseDate);
     assert.strictEqual(res.cleanTitle, tc.expected.cleanTitle, `cleanTitle mismatch for: "${tc.input}"`);
     assert.strictEqual(res.dueDate, tc.expected.dueDate, `dueDate mismatch for: "${tc.input}"`);
     assert.strictEqual(res.priority, tc.expected.priority, `priority mismatch for: "${tc.input}"`);

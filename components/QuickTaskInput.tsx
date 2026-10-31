@@ -27,12 +27,18 @@ export const QuickTaskInput: React.FC = () => {
 
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // Track explicit manual user overrides so NLP detection does not overwrite manual chip actions
+  const userInteractedPriority = useRef(false);
+  const userInteractedCategory = useRef(false);
+  const userInteractedDueDate = useRef(false);
+  const userInteractedReminder = useRef(false);
+
   // Parse natural language from current title in real time
   const parsed = useMemo(() => {
     return parseQuickTask(title, categories);
   }, [title, categories]);
 
-  // Track previous parsed entity values to know when to sync or revert
+  // Track previous parsed entity values to know when fresh tags arrive or are removed
   const prevParsedPriorityRef = useRef<Priority | null>(null);
   const prevParsedCategoryRef = useRef<string | null>(null);
   const prevParsedDueDateRef = useRef<string | null>(null);
@@ -42,8 +48,10 @@ export const QuickTaskInput: React.FC = () => {
   useEffect(() => {
     if (parsed.priority && parsed.priority !== prevParsedPriorityRef.current) {
       setPriority(parsed.priority);
+      userInteractedPriority.current = false;
     } else if (!parsed.priority && prevParsedPriorityRef.current) {
       setPriority('medium');
+      userInteractedPriority.current = false;
     }
     prevParsedPriorityRef.current = parsed.priority;
   }, [parsed.priority]);
@@ -52,8 +60,10 @@ export const QuickTaskInput: React.FC = () => {
   useEffect(() => {
     if (parsed.category && parsed.category !== prevParsedCategoryRef.current) {
       setCategory(parsed.category);
+      userInteractedCategory.current = false;
     } else if (!parsed.category && prevParsedCategoryRef.current) {
       setCategory(selectedCategory !== 'all' ? selectedCategory : 'Inbox');
+      userInteractedCategory.current = false;
     }
     prevParsedCategoryRef.current = parsed.category;
   }, [parsed.category, selectedCategory]);
@@ -62,8 +72,10 @@ export const QuickTaskInput: React.FC = () => {
   useEffect(() => {
     if (parsed.dueDate && parsed.dueDate !== prevParsedDueDateRef.current) {
       setDueDate(parsed.dueDate);
+      userInteractedDueDate.current = false;
     } else if (!parsed.dueDate && prevParsedDueDateRef.current) {
       setDueDate(activeTab === 'today' ? todayStr : (activeTab === 'upcoming' ? tomorrowStr : null));
+      userInteractedDueDate.current = false;
     }
     prevParsedDueDateRef.current = parsed.dueDate;
   }, [parsed.dueDate, activeTab, todayStr, tomorrowStr]);
@@ -72,8 +84,10 @@ export const QuickTaskInput: React.FC = () => {
   useEffect(() => {
     if (parsed.reminderAt && parsed.reminderAt !== prevParsedReminderRef.current) {
       setReminderAt(parsed.reminderAt);
+      userInteractedReminder.current = false;
     } else if (!parsed.reminderAt && prevParsedReminderRef.current) {
       setReminderAt(null);
+      userInteractedReminder.current = false;
     }
     prevParsedReminderRef.current = parsed.reminderAt;
   }, [parsed.reminderAt]);
@@ -114,11 +128,14 @@ export const QuickTaskInput: React.FC = () => {
     const taskTitle = parsed.cleanTitle || title.trim();
     if (!taskTitle) return;
 
-    const finalPriority = parsed.priority || priority;
-    const finalCategory = parsed.category || category || (selectedCategory !== 'all' ? selectedCategory : 'Inbox');
+    const defaultCategory = selectedCategory !== 'all' ? selectedCategory : 'Inbox';
+    const finalPriority = userInteractedPriority.current ? priority : (parsed.priority || priority);
+    const finalCategory = userInteractedCategory.current ? category : (parsed.category || category || defaultCategory);
     const effectiveDueDate = activeTab === 'today' ? (dueDate || todayStr) : dueDate;
-    const finalDueDate = parsed.dueDate || effectiveDueDate;
-    const finalReminderAt = parsed.reminderAt || (reminderAt ? new Date(reminderAt).toISOString() : null);
+    const finalDueDate = userInteractedDueDate.current ? dueDate : (parsed.dueDate || effectiveDueDate);
+    const finalReminderAt = userInteractedReminder.current
+      ? (reminderAt ? new Date(reminderAt).toISOString() : null)
+      : (parsed.reminderAt || (reminderAt ? new Date(reminderAt).toISOString() : null));
 
     await addTask({
       title: taskTitle,
@@ -127,6 +144,12 @@ export const QuickTaskInput: React.FC = () => {
       dueDate: finalDueDate,
       reminderAt: finalReminderAt,
     });
+
+    // Reset interaction tracking flags
+    userInteractedPriority.current = false;
+    userInteractedCategory.current = false;
+    userInteractedDueDate.current = false;
+    userInteractedReminder.current = false;
 
     // Reset tracking refs
     prevParsedPriorityRef.current = null;
@@ -137,7 +160,7 @@ export const QuickTaskInput: React.FC = () => {
     // Reset inputs
     setTitle('');
     setPriority('medium');
-    setCategory(selectedCategory !== 'all' ? selectedCategory : 'Inbox');
+    setCategory(defaultCategory);
     setReminderAt(null);
     setShowReminderPicker(false);
     if (activeTab === 'today') {
@@ -148,6 +171,7 @@ export const QuickTaskInput: React.FC = () => {
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.nativeEvent.isComposing) return;
     if (e.key === 'Enter' || e.keyCode === 13) {
       e.preventDefault();
       handleSubmit(e);
@@ -259,6 +283,11 @@ export const QuickTaskInput: React.FC = () => {
                   📅 {parsed.extractedTags.dateText}
                 </span>
               )}
+              {parsed.reminderAt && (
+                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-white dark:bg-neutral-800 border border-brand-200 dark:border-neutral-700 font-medium text-brand-700 dark:text-brand-300">
+                  🔔 {formatReminderDisplay(parsed.reminderAt)}
+                </span>
+              )}
               {parsed.priority && (
                 <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-white dark:bg-neutral-800 border border-brand-200 dark:border-neutral-700 font-medium text-brand-700 dark:text-brand-300 capitalize">
                   🚩 {parsed.priority}
@@ -279,7 +308,10 @@ export const QuickTaskInput: React.FC = () => {
             {/* Quick Due Date Chips */}
             <button
               type="button"
-              onClick={() => setDueDate(dueDate === todayStr ? null : todayStr)}
+              onClick={() => {
+                userInteractedDueDate.current = true;
+                setDueDate(dueDate === todayStr ? null : todayStr);
+              }}
               className={`flex items-center gap-1 px-2.5 py-1 rounded-lg border text-[11px] font-medium transition ${
                 dueDate === todayStr
                   ? 'bg-brand-50 dark:bg-brand-950/60 border-brand-300 dark:border-brand-800 text-brand-700 dark:text-brand-300 font-bold'
@@ -292,7 +324,10 @@ export const QuickTaskInput: React.FC = () => {
 
             <button
               type="button"
-              onClick={() => setDueDate(dueDate === tomorrowStr ? null : tomorrowStr)}
+              onClick={() => {
+                userInteractedDueDate.current = true;
+                setDueDate(dueDate === tomorrowStr ? null : tomorrowStr);
+              }}
               className={`flex items-center gap-1 px-2.5 py-1 rounded-lg border text-[11px] font-medium transition ${
                 dueDate === tomorrowStr
                   ? 'bg-brand-50 dark:bg-brand-950/60 border-brand-300 dark:border-brand-800 text-brand-700 dark:text-brand-300 font-bold'
@@ -309,7 +344,10 @@ export const QuickTaskInput: React.FC = () => {
                 <span>{formatCustomDateDisplay(dueDate)}</span>
                 <button
                   type="button"
-                  onClick={() => setDueDate(null)}
+                  onClick={() => {
+                    userInteractedDueDate.current = true;
+                    setDueDate(null);
+                  }}
                   className="ml-0.5 text-neutral-400 hover:text-rose-500 transition"
                   title="Remove due date"
                 >
@@ -322,7 +360,10 @@ export const QuickTaskInput: React.FC = () => {
             <div className="relative inline-flex items-center">
               <select
                 value={priority}
-                onChange={(e) => setPriority(e.target.value as Priority)}
+                onChange={(e) => {
+                  userInteractedPriority.current = true;
+                  setPriority(e.target.value as Priority);
+                }}
                 className={`appearance-none bg-transparent border rounded-lg pl-6 pr-2 py-1 text-[11px] font-medium outline-none cursor-pointer transition ${
                   priority !== 'medium'
                     ? 'border-brand-300 dark:border-brand-800 bg-brand-50/50 dark:bg-brand-950/40 text-brand-700 dark:text-brand-300 font-semibold'
@@ -345,7 +386,10 @@ export const QuickTaskInput: React.FC = () => {
             <div className="relative inline-flex items-center">
               <select
                 value={category}
-                onChange={(e) => setCategory(e.target.value)}
+                onChange={(e) => {
+                  userInteractedCategory.current = true;
+                  setCategory(e.target.value);
+                }}
                 className={`appearance-none bg-transparent border rounded-lg pl-6 pr-2 py-1 text-[11px] font-medium outline-none cursor-pointer transition ${
                   category !== 'Inbox' && category !== selectedCategory
                     ? 'border-brand-300 dark:border-brand-800 bg-brand-50/50 dark:bg-brand-950/40 text-brand-700 dark:text-brand-300 font-semibold'
@@ -377,6 +421,7 @@ export const QuickTaskInput: React.FC = () => {
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation();
+                    userInteractedReminder.current = true;
                     setReminderAt(null);
                     setShowReminderPicker(false);
                   }}
@@ -431,6 +476,7 @@ export const QuickTaskInput: React.FC = () => {
             <button
               type="button"
               onClick={() => {
+                userInteractedReminder.current = true;
                 setPresetReminder(1);
                 setShowReminderPicker(false);
               }}
@@ -442,6 +488,7 @@ export const QuickTaskInput: React.FC = () => {
             <button
               type="button"
               onClick={() => {
+                userInteractedReminder.current = true;
                 setTomorrowMorningReminder();
                 setShowReminderPicker(false);
               }}
@@ -456,6 +503,7 @@ export const QuickTaskInput: React.FC = () => {
               value={reminderAt ? formatForDateTimeInput(new Date(reminderAt)) : ''}
               min={formatForDateTimeInput(new Date())}
               onChange={(e) => {
+                userInteractedReminder.current = true;
                 if (e.target.value) {
                   setReminderAt(new Date(e.target.value).toISOString());
                 } else {
